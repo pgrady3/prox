@@ -42,6 +42,8 @@ def get_data_from_batched_dict(in_dict, batch_idx, batch_n):
 
         if isinstance(value, np.ndarray) and len(value.shape) >= 1 and value.shape[0] == batch_n:
             out_dict[key] = value[batch_idx, ...]
+        elif isinstance(value, np.ndarray) and len(value.shape) >= 1 and value.shape[0] == 1:
+            out_dict[key] = value[0, ...]
         elif isinstance(value, dict):
             out_dict[key] = get_data_from_batched_dict(value, batch_idx, batch_n)
         else:

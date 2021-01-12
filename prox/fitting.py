@@ -711,7 +711,7 @@ class SMPLifyLoss(nn.Module):
             if body_sdf.lt(0).sum().item() < 1:
                 sdf_penetration_loss = torch.tensor(0.0, dtype=joint_loss.dtype, device=joint_loss.device)
             else:
-                sel_sdf = torch.max(body_sdf, torch.zeros_like(body_sdf))
+                sel_sdf = torch.min(body_sdf, torch.zeros_like(body_sdf))
                 sdf_dot = sel_sdf.unsqueeze(2) * sdf_normals
                 sdf_penetration_loss = self.sdf_penetration_weight * sdf_dot.pow(2).sum(dim=2).sqrt().sum(dim=1)
 

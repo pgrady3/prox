@@ -58,6 +58,7 @@ def get_smpl(pkl_data, json_data):
     print('Target height {}, weight {}'.format(json_data['people'][0]['height'], json_data['people'][0]['weight']))
 
     betas = torch.Tensor(pkl_data['betas']).unsqueeze(0)
+    print('Betas:', pkl_data['betas'])
     pose = torch.Tensor(pkl_data['body_pose']).unsqueeze(0)
     transl = torch.Tensor(pkl_data['transl']).unsqueeze(0)
     global_orient = torch.Tensor(pkl_data['global_orient']).unsqueeze(0)
@@ -95,7 +96,7 @@ def get_smpl(pkl_data, json_data):
 
     camera = PerspectiveCamera(rotation=torch.tensor(pkl_data['camera_rotation']).unsqueeze(0),
                                translation=torch.tensor(pkl_data['camera_translation']).unsqueeze(0),
-                               center=torch.tensor(pkl_data['camera_center']),
+                               center=torch.tensor(pkl_data['camera_center']).unsqueeze(0),
                                focal_length_x=torch.tensor(pkl_data['camera_focal_length_x']),
                                focal_length_y=torch.tensor(pkl_data['camera_focal_length_y']))
 

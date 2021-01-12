@@ -197,7 +197,8 @@ def main(**args):
     for idx, data in enumerate(tqdm(dataloader)):
         batch_size = data['keypoints'].shape[0]
         args['batch_size'] = batch_size
-        # First, make the SMPL and camera model, since they're batch size dependent (stupid, I know)
+        # First, make the SMPL and camera model for each batch, since they're batch size dependent (stupid, I know)
+        # Also, give it a beta of batch size one, forcing beta sharing
         model_params = dict(model_path=args.get('model_folder'),
                             joint_mapper=joint_mapper,
                             create_global_orient=True,
@@ -212,6 +213,9 @@ def main(**args):
                             create_transl=True,
                             dtype=dtype,
                             **args)
+
+        if args['share_betas']:
+            model_params['betas'] = torch.zeros([1, 10], dtype=dtype)
 
         male_model = smplx.create(gender='male', **model_params)
         # SMPL-H has no gender-neutral model

@@ -392,7 +392,10 @@ def parse_config(argv=None):
     parser.add_argument('--load_scene', type=lambda arg: arg.lower() in ['true', '1'],
                         default=False, help='')
 
-
+    parser.add_argument('--share_betas',
+                        type=lambda arg: arg.lower() == 'true',
+                        default=False,
+                        help='Share beta values across batch')
 
     args = parser.parse_args()
     args_dict = vars(args)
