@@ -53,6 +53,7 @@ def get_all_smpl(pkl_data, json_data):
 
     return all_meshes
 
+
 def get_smpl(pkl_data, json_data):
     gender = json_data['people'][0]['gender_gt']
     print('Target height {}, weight {}'.format(json_data['people'][0]['height'], json_data['people'][0]['weight']))
@@ -117,10 +118,11 @@ def get_smpl(pkl_data, json_data):
 def get_depth(idx):
     depth, jt, bb = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw', if_sq_bb=False)
     bb = bb.round().astype(int)
+    bb += np.array([-25, -5, 50, 10])    # Patrick, expand "bounding box", since it often cuts off parts of the body
 
     pointcloud = ut.get_ptc(depth, SLP_dataset.f_d, SLP_dataset.c_d, bb) / 1000.0
 
-    valid_pcd = np.logical_and(pointcloud[:, 2] > 1.5, pointcloud[:, 2] < 2.5)  # Cut out any outliers above the bed
+    valid_pcd = np.logical_and(pointcloud[:, 2] > 1.5, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
     pointcloud = pointcloud[valid_pcd, :]
 
     pcd = o3d.geometry.PointCloud()

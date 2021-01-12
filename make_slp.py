@@ -95,6 +95,10 @@ def make_mask(sample, idx, keypoints=None, vis=False):
 
     depth, jt, bb = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw', if_sq_bb=False)
     bb = bb.round().astype(int)
+    # print('bb before', bb)
+    bb += np.array([-25, -5, 50, 10])    # Patrick, expand "bounding box", since it often cuts off parts of the body
+
+    # print('bb after', bb)
 
     pointcloud = ut.get_ptc(depth, SLP_dataset.f_d, SLP_dataset.c_d, bb)
     pcd = o3d.geometry.PointCloud()
@@ -165,19 +169,6 @@ def make_dataset():
         copy_images(sample, idx)
         keypoints = copy_keypoints(sample, idx)
         make_mask(sample, idx, keypoints=keypoints, vis=False)
-
-        # if idx > 5:
-        #     break
-
-    # all_subjects = glob(os.path.join(SLP_PATH, '*/'))
-    # for subj_path in all_subjects:
-    #     subj_id = subj_path.split(os.sep)[-2]
-    #     for phase in phases:
-    #         # copy_images(subj_path, subj_id, phase)
-    #         # copy_keypoints(subj_path, subj_id, phase)
-    #         pass
-    #
-    #     break   # Only do one for now
 
 
 if __name__ == "__main__":

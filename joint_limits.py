@@ -22,12 +22,12 @@ axang_limits_patrick = np.array(  # In degrees
      [-20., 20.], [-8., 8.], [-8., 8.],  # Upper back
      [-0.6, 0.6], [-0.6, 0.6], [-0.6, 0.6],  # Foot L?
      [-0.6, 0.6], [-0.6, 0.6], [-0.6, 0.6],  # Foot R? 10
-     [-45., 60.], [-15., 15.], [-20., 20.],  # Lower neck
+     [-25., 45.], [-15., 15.], [-20., 20.],  # Lower neck
      # [-40., 50], [-50, 20], [-40., 50],  # Inner shoulder L
      # [-40., 50], [-20, 50], [-50, 40.],  # Inner shoulder R
      [-40., 40.], [-50., 20.], [-40., 40.],  # Inner shoulder L
      [-40., 40.], [-20., 50.], [-40., 40.],  # Inner shoulder R
-     [-30., 60.], [-5., 5.], [-5., 5.],  # Upper neck
+     [-15., 45.], [-5., 5.], [-5., 5.],  # Upper neck
      # [-70., 70], [-90, 35], [-90., 50],  # Outer shoulder L 15
      # [-70., 70], [-35, 90], [-50, 90.],  # Outer shoulder R
      [-70., 70.], [-90., 35.], [-90., 60.],  # Outer shoulder L 15
@@ -102,12 +102,12 @@ if __name__ == "__main__":
     # view_multi([2, 5, 8], [2, 2, 2], [0, 0, 0]) # Back
     # view_multi([2, 5, 8], [2, 2, 2], [1, 1, 1])
 
-    # view_multi([11, 14], [0, 0], [0, 0]) # Neck
-    # view_multi([11, 14], [0, 0], [1, 1]) # Neck
-    # view_multi([11, 14], [1, 1], [0, 0]) # Neck
-    # view_multi([11, 14], [1, 1], [1, 1]) # Neck
-    # view_multi([11, 14], [2, 2], [0, 0]) # Neck
-    # view_multi([11, 14], [2, 2], [1, 1]) # Neck
+    view_multi([11, 14], [0, 0], [0, 0]) # Neck
+    view_multi([11, 14], [0, 0], [1, 1]) # Neck
+    view_multi([11, 14], [1, 1], [0, 0]) # Neck
+    view_multi([11, 14], [1, 1], [1, 1]) # Neck
+    view_multi([11, 14], [2, 2], [0, 0]) # Neck
+    view_multi([11, 14], [2, 2], [1, 1]) # Neck
 
     # view_multi([12, 15, 17], [0, 0, 1], [0, 0, 0.5]) # Shoulder
     # view_multi([12, 15, 17], [0, 0, 1], [1, 1, 0.5]) # Shoulder

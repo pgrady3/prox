@@ -740,7 +740,7 @@ def fit_single_frame(img,
                 sel_res = misc_utils.get_data_from_batched_dict(result, idx, len(result_fn))
                 all_results.append(sel_res)
 
-                cost = sel_res['loss_dict']['total'] + sel_res['loss_dict']['pprior'] * 60
+                cost = sel_res['loss_dict']['total'] + sel_res['loss_dict']['pprior'] * 20  # Patrick: Magic weight to make it hate bad poses
                 if cost < min_loss:
                     min_loss = cost
                     pkl_data.update(sel_res)
