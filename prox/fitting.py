@@ -26,13 +26,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pytorch3d
+from pytorch3d.ops import knn_points
 
 from psbody.mesh.visibility import visibility_compute
 from psbody.mesh import Mesh
 
 import misc_utils as utils
-import dist_chamfer as ext
-distChamfer = ext.chamferDist()
+# import dist_chamfer as ext
+# distChamfer = ext.chamferDist()
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -222,10 +224,12 @@ class FittingMonitor(object):
                 loss_rel_change = utils.rel_change(prev_loss, loss.item())
 
                 if loss_rel_change <= self.ftol:
+                    print('Break ftol')
                     break
 
             if all([torch.abs(var.grad.view(-1).max()).item() < self.gtol
                     for var in params if var.grad is not None]):
+                print('Break gtol')
                 break
             prev_loss = loss.item()
 
@@ -242,7 +246,7 @@ class FittingMonitor(object):
                                scan_tensor=None,
                                create_graph=False,
                                **kwargs):
-        faces_tensor = body_model.faces_tensor.view(-1)
+        faces_tensor = body_model.faces_tensor
         append_wrists = self.model_type == 'smpl' and use_vposer
 
         def fitting_func(backward=True):
@@ -306,16 +310,17 @@ class FittingMonitor(object):
                         self.vis_o3d.add_geometry(self.joints_gt[i])
 
                     # Visualize camera
-                    camera_origin = camera.translation.detach().cpu().numpy().squeeze()
+                    camera_origin = camera.translation[0, :].detach().cpu().numpy()
                     self.vis_o3d.add_geometry(self.get_o3d_sphere([1.0, 0.0, 0.0], pos=camera_origin))
 
                     if scan_tensor is not None:
-                        self.scan.points = o3d.Vector3dVector(scan_tensor.detach().cpu().numpy().squeeze())
-                        N = np.asarray(self.scan.points).shape[0]
+                        scan_batch = scan_tensor.points_list()[0]
+                        self.scan.points = o3d.Vector3dVector(scan_batch.detach().cpu().numpy())
+                        N = scan_batch.shape[0]
                         self.scan.colors = o3d.Vector3dVector(np.tile([1.00, 0.75, 0.80], [N, 1]))
                         self.vis_o3d.add_geometry(self.scan)
 
-                    lbl = 'Subj {} Sample {}'.format(global_vars.cur_participant, global_vars.cur_sample)
+                    lbl = 'Subj {} Sample {}'.format(global_vars.cur_participant[0], global_vars.cur_sample[0])
                     self.vis_o3d.add_geometry(utils.text_3d(lbl, (0, -1.5, 2), direction=(0.01, 0, -1), degree=-90, font_size=200, density=0.15))
 
                     self.vis_o3d.add_geometry(self.lbl_stage)
@@ -437,13 +442,15 @@ class SMPLifyLoss(nn.Module):
         self.t = t
 
         self.betanet = betanet
-        self.height = height
-        self.weight = weight
+        self.register_buffer('weight', torch.tensor(weight, dtype=dtype))
+        self.register_buffer('height', torch.tensor(height, dtype=dtype))
+
         self.weight_w = weight_w
         self.height_w = height_w
-        gender_tensor = torch.tensor([0, 1], dtype=dtype).unsqueeze(0)
-        if gender != 'male':
-            gender_tensor = 1 - gender_tensor
+        gender_tensor = torch.repeat_interleave(torch.tensor([[0, 1]], dtype=dtype), repeats=len(gender), dim=0)
+        for i, g in enumerate(gender):
+            if g != 'male':
+                gender_tensor[i, :] = 1 - gender_tensor[i, :]
         self.register_buffer('gender_tensor', gender_tensor)
 
         self.interpenetration = interpenetration
@@ -524,6 +531,7 @@ class SMPLifyLoss(nn.Module):
                 scan_tensor=None, visualize=False,
                 scene_v=None, scene_vn=None, scene_f=None,ftov=None,
                 **kwargs):
+        batch_size = gt_joints.shape[0]
 
         forehead_vert_id = 336      # Patrick: replace head joint with a vertex on the head
         model_joints = body_model_output.joints
@@ -540,20 +548,16 @@ class SMPLifyLoss(nn.Module):
         joint_err = gt_joints - projected_joints
         joint_err_sq = joint_err.pow(2)
         # joint_diff = self.robustifier(gt_joints - projected_joints)
-        joint_loss = (torch.sum(weights ** 2 * joint_err_sq) *
-                      self.data_weight ** 2)
+        joint_loss = (torch.sum(weights ** 2 * joint_err_sq, dim=[1, 2]) * self.data_weight ** 2)
 
         # Calculate the loss from the Pose prior
         if use_vposer:
             pprior_loss = (pose_embedding.pow(2).sum() *
                            self.body_pose_weight ** 2)
         else:
-            pprior_loss = torch.sum(self.body_pose_prior(
-                body_model_output.body_pose,
-                body_model_output.betas)) * self.body_pose_weight ** 2
+            pprior_loss = self.body_pose_prior(body_model_output.body_pose, body_model_output.betas) * self.body_pose_weight ** 2
 
-        shape_loss = torch.sum(self.shape_prior(
-            body_model_output.betas)) * self.shape_weight ** 2
+        shape_loss = self.shape_prior(body_model_output.betas) * self.shape_weight ** 2
 
 
         # Patrick - weight and height loss
@@ -565,9 +569,11 @@ class SMPLifyLoss(nn.Module):
         # print('Height {} est {}'.format(self.height, batch_height_est.detach().item()))
         # print('Weight {} est {}'.format(self.weight, batch_weight_est.detach().item()))
         # print('Cur gender flag', tmp_gender)
-        global_vars.cur_weight = batch_weight_est.item()
-        global_vars.cur_height = batch_height_est.item()
-        physical_loss = F.mse_loss(self.weight, batch_weight_est) * self.weight_w + F.mse_loss(self.height, batch_height_est) * self.height_w
+        global_vars.cur_weight = batch_weight_est.detach().cpu().numpy()
+        global_vars.cur_height = batch_height_est.detach().cpu().numpy()
+        d_weight = self.weight - batch_weight_est.squeeze()
+        d_height = self.height - batch_height_est.squeeze()
+        physical_loss = d_weight.pow(2) * self.weight_w + d_height.pow(2) * self.height_w
 
 
         # Calculate the prior over the joint rotations. This a heuristic used
@@ -608,9 +614,7 @@ class SMPLifyLoss(nn.Module):
         # Calculate the loss due to interpenetration
         if (self.interpenetration and self.coll_loss_weight.item() > 0):
             batch_size = projected_joints.shape[0]
-            triangles = torch.index_select(
-                body_model_output.vertices, 1,
-                body_model_faces).view(batch_size, -1, 3, 3)
+            triangles = torch.index_select(body_model_output.vertices, 1, body_model_faces.view(-1)).view(batch_size, -1, 3, 3)
 
             with torch.no_grad():
                 collision_idxs = self.search_tree(triangles)
@@ -620,41 +624,58 @@ class SMPLifyLoss(nn.Module):
                 collision_idxs = self.tri_filtering_module(collision_idxs)
 
             if collision_idxs.ge(0).sum().item() > 0:
-                pen_loss = torch.sum(
-                    self.coll_loss_weight *
-                    self.pen_distance(triangles, collision_idxs))
+                pen_loss = self.coll_loss_weight * self.pen_distance(triangles, collision_idxs)
 
         s2m_dist = 0.0
         m2s_dist = 0.0
         # calculate the scan2mesh and mesh2scan loss from the sparse point cloud
-        if (self.s2m or self.m2s) and (
-                self.s2m_weight > 0 or self.m2s_weight > 0) and scan_tensor is not None:
-            vertices_np = body_model_output.vertices.detach().cpu().numpy().squeeze()
-            body_faces_np = body_model_faces.detach().cpu().numpy().reshape(-1, 3)
-            m = Mesh(v=vertices_np, f=body_faces_np)
+        if (self.s2m or self.m2s) and (self.s2m_weight > 0 or self.m2s_weight > 0) and scan_tensor is not None:
+            # vertices_np = body_model_output.vertices.detach().cpu().numpy().squeeze()
+            # body_faces_np = body_model_faces.detach().cpu().numpy().reshape(-1, 3)
+            # m = Mesh(v=vertices_np, f=body_faces_np)
+            #
+            # (vis, n_dot) = visibility_compute(v=m.v, f=m.f, cams=np.array([[0.0, 0.0, 0.0]]))
+            # vis = vis.squeeze()
 
-            (vis, n_dot) = visibility_compute(v=m.v, f=m.f, cams=np.array([[0.0, 0.0, 0.0]]))
-            vis = vis.squeeze()
+            # TODO ignore body mask?
+            # TODO ignore visibility map? Would help with points getting stuck inside body, only care about normal
+            # Maybe need to do this in packed?
 
-            if self.s2m and self.s2m_weight > 0 and vis.sum() > 0:
-                s2m_dist, _, _, _ = distChamfer(scan_tensor,
-                                                body_model_output.vertices[:, np.where(vis > 0)[0], :])
-                s2m_dist = self.s2m_robustifier(s2m_dist.sqrt())
-                s2m_dist = self.s2m_weight * s2m_dist.sum()
-            if self.m2s and self.m2s_weight > 0 and vis.sum() > 0:
-                _, m2s_dist, _, _ = distChamfer(scan_tensor,
-                                                body_model_output.vertices[:, np.where(np.logical_and(vis > 0, self.body_mask))[0], :])
+            in_mesh_verts = body_model_output.vertices
+            in_mesh_faces = body_model_faces.unsqueeze(0).repeat(batch_size, 1, 1)
+            body_mesh = pytorch3d.structures.Meshes(verts=in_mesh_verts, faces=in_mesh_faces)
+            mesh_normals = body_mesh.verts_normals_padded()
+            mesh_verts = body_mesh.verts_padded()
+            camera_pos = torch.tensor([0.0, 0.0, 0.0], device=mesh_verts.device)
+            vec_mesh_to_cam = camera_pos - mesh_verts
+            towards_camera = torch.sum(mesh_normals * vec_mesh_to_cam, dim=2) > 0
+            num_mesh_verts_towards_camera = torch.sum(towards_camera, dim=1)
 
-                m2s_dist = self.m2s_robustifier(m2s_dist.sqrt())
-                m2s_dist = self.m2s_weight * m2s_dist.sum()
+            mesh_verts_towards_camera = torch.zeros([batch_size, num_mesh_verts_towards_camera.max(), 3], device=mesh_verts.device)
+            for i in range(batch_size):     # There's probably a cleaner way to do this
+                mesh_verts_towards_camera[i, 0:num_mesh_verts_towards_camera[i], :] = mesh_verts[i, towards_camera[i, :], :]
+
+            num_scan_points = scan_tensor.num_points_per_cloud()    # Get number of points in mesh
+            if self.s2m and self.s2m_weight > 0:
+                # Note, returns squared distance
+                s2m_dist = knn_points(scan_tensor.points_padded(), mesh_verts_towards_camera, lengths1=num_scan_points, lengths2=num_mesh_verts_towards_camera, K=1)
+
+                # s2m_dist, _, _, _ = distChamfer(scan_tensor, body_model_output.vertices[:, np.where(vis > 0)[0], :])
+                s2m_dist = self.s2m_robustifier(s2m_dist.dists.sqrt())
+                s2m_dist = self.s2m_weight * s2m_dist.sum(dim=[1, 2])
+            if self.m2s and self.m2s_weight > 0:
+                # _, m2s_dist, _, _ = distChamfer(scan_tensor, body_model_output.vertices[:, np.where(np.logical_and(vis > 0, self.body_mask))[0], :])
+                m2s_dist = knn_points(mesh_verts_towards_camera, scan_tensor.points_padded(), lengths2=num_scan_points, lengths1=num_mesh_verts_towards_camera, K=1)
+
+                m2s_dist = self.m2s_robustifier(m2s_dist.dists.sqrt())
+                m2s_dist = self.m2s_weight * m2s_dist.sum(dim=[1, 2])
 
         # Transform vertices to world coordinates
         if self.R is not None and self.t is not None:
-            vertices = body_model_output.vertices
-            nv = vertices.shape[1]
-            vertices.squeeze_()
+            vertices = body_model_output.vertices.view(-1, 3)
+            nv = vertices.shape[0]
             vertices = self.R.mm(vertices.t()).t() + self.t.repeat([nv, 1])
-            vertices.unsqueeze_(0)
+            vertices = vertices.reshape(batch_size, -1, 3)
 
         # Compute scene penetration using signed distance field (SDF)
         # sdf_penetration_loss = 0.0
@@ -690,10 +711,9 @@ class SMPLifyLoss(nn.Module):
             if body_sdf.lt(0).sum().item() < 1:
                 sdf_penetration_loss = torch.tensor(0.0, dtype=joint_loss.dtype, device=joint_loss.device)
             else:
-                contact_mask = body_sdf < 0
-                sel_sdf = body_sdf[contact_mask].unsqueeze(dim=-1).abs()
-                sel_normal = sdf_normals[0, body_sdf.view(-1) < 0, :]   # Will not work batched
-                sdf_penetration_loss = self.sdf_penetration_weight * (sel_sdf * sel_normal).pow(2).sum(dim=-1).sqrt().sum()
+                sel_sdf = torch.max(body_sdf, torch.zeros_like(body_sdf))
+                sdf_dot = sel_sdf.unsqueeze(2) * sdf_normals
+                sdf_penetration_loss = self.sdf_penetration_weight * sdf_dot.pow(2).sum(dim=2).sqrt().sum(dim=1)
 
 
         # Compute the contact loss
@@ -701,12 +721,9 @@ class SMPLifyLoss(nn.Module):
         if self.contact and self.contact_loss_weight >0:
             # select contact vertices
             contact_body_vertices = vertices[:, self.contact_verts_ids, :]
-            contact_dist, _, idx1, _ = distChamfer(
-                contact_body_vertices.contiguous(), scene_v)
+            contact_dist, _, idx1, _ = distChamfer(contact_body_vertices.contiguous(), scene_v)
 
-            body_triangles = torch.index_select(
-                vertices, 1,
-                body_model_faces).view(1, -1, 3, 3)
+            body_triangles = torch.index_select(vertices, 1, body_model_faces).view(1, -1, 3, 3)
             # Calculate the edges of the triangles
             # Size: BxFx3
             edge0 = body_triangles[:, :, 1] - body_triangles[:, :, 0]
@@ -745,31 +762,33 @@ class SMPLifyLoss(nn.Module):
                       left_hand_prior_loss + right_hand_prior_loss + m2s_dist + s2m_dist
                       + sdf_penetration_loss + contact_loss + physical_loss)
 
-        global_vars.cur_loss_dict = {'total': total_loss.item(), 'joint': joint_loss.item(),
-                                     's2m': torch.tensor(s2m_dist).item(), 'm2s': torch.tensor(m2s_dist).item(),
-                                     'pprior': pprior_loss.item(), 'shape': shape_loss.item(),
-                                     'angle_prior': angle_prior_loss.item(), 'pen': torch.tensor(pen_loss).item(),
-                                     'sdf_penetration': torch.tensor(sdf_penetration_loss).item(), 'contact': torch.tensor(contact_loss).item(),
-                                     'physical': physical_loss.item()}
+        loss_dict = {'total': total_loss, 'joint': joint_loss,
+                                     's2m': s2m_dist, 'm2s': m2s_dist,
+                                     'pprior': pprior_loss, 'shape': shape_loss,
+                                     'angle_prior': angle_prior_loss, 'pen': pen_loss,
+                                     'sdf_penetration': sdf_penetration_loss, 'contact': contact_loss,
+                                     'physical': physical_loss}
 
-        if visualize: # and global_vars.cur_opt_step % 10 == 0:
-            # print('total:{:.2f}, joint_loss:{:0.2f},  s2m:{:0.2f}, m2s:{:0.2f}, penetration:{:0.2f}, contact:{:0.2f}'.
-            #       format(total_loss.item(), joint_loss.item() ,torch.tensor(s2m_dist).item(),
-            #              torch.tensor(m2s_dist).item() ,torch.tensor(sdf_penetration_loss).item(), torch.tensor(contact_loss).item()))
-            # print('pprior:{:.2f}, shape:{:.2f}, angle_pri:{:.2f}, pen:{:.2f}, jaw:{:.2f}, expres:{:.2f}'.format(
-            #     pprior_loss.item(), shape_loss.item(), angle_prior_loss.item(),
-            #     torch.tensor(pen_loss).item(), torch.tensor(jaw_prior_loss).item(), torch.tensor(expression_loss).item()))
-            for key in global_vars.cur_loss_dict.keys():
-                if key == 'tot' or global_vars.cur_loss_dict[key] == 0:
-                    continue
-                print('{}:{:.0f}'.format(key, global_vars.cur_loss_dict[key]), end=' ')
-            print('max joint:{:.2f}'.format(global_vars.cur_max_joint))
+        global_vars.cur_loss_dict = dict()
+        for key, item in loss_dict.items():
+            if torch.is_tensor(item):
+                global_vars.cur_loss_dict[key] = item.detach().cpu().numpy()
+            else:
+                global_vars.cur_loss_dict[key] = item
 
-            # print('tot:{:.2f}, j_loss:{:0.2f}, s2m:{:0.2f}, m2s:{:0.2f}, pprior:{:.2f}, shape:{:.2f}, ang_pri:{:.2f}, pen:{:.2f}, phys{:.2f}, sdf{:.2f}'.
-            #       format(total_loss.item(), joint_loss.item(), torch.tensor(s2m_dist).item(),
-            #              torch.tensor(m2s_dist).item(), pprior_loss.item(), shape_loss.item(),
-            #              angle_prior_loss.item(), torch.tensor(pen_loss).item(), physical_loss.item(), torch.tensor(sdf_penetration_loss).item()))
-        return total_loss
+        if visualize:
+            np.set_printoptions(precision=1)
+            for key, value in global_vars.cur_loss_dict.items():
+                if isinstance(value, np.ndarray):
+                    if value.sum() == 0:
+                        continue
+                else:
+                    if value == 0:
+                        continue
+                print('{}:{}'.format(key, global_vars.cur_loss_dict[key]), end=' ')
+            print('max_joint:{}'.format(global_vars.cur_max_joint))
+
+        return total_loss.sum()
 
 
 class SMPLifyCameraInitLoss(nn.Module):

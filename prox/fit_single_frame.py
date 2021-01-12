@@ -50,6 +50,7 @@ from models.betanet import FC
 import global_vars
 import math
 import joint_limits
+import misc_utils
 
 
 def fit_single_frame(img,
@@ -145,6 +146,9 @@ def fit_single_frame(img,
 
     if kwargs['optim_type'] == 'lbfgsls':
         assert batch_size == 1, 'PyTorch L-BFGS only supports batch_size == 1'
+
+    batch_size = keypoints.shape[0]
+
     body_model.reset_params()
     body_model.transl.requires_grad = True
 
@@ -287,7 +291,7 @@ def fit_single_frame(img,
     keypoint_data = torch.tensor(keypoints, dtype=dtype)
     gt_joints = keypoint_data[:, :, :2]
     if use_joints_conf:
-        joints_conf = keypoint_data[:, :, 2].reshape(1, -1)
+        joints_conf = keypoint_data[:, :, 2]
 
     # Transfer the data to the correct device
     gt_joints = gt_joints.to(device=device, dtype=dtype)
@@ -296,7 +300,7 @@ def fit_single_frame(img,
 
     scan_tensor = None
     if scan is not None:
-        scan_tensor = torch.tensor(scan.get('points'), device=device, dtype=dtype).unsqueeze(0)
+        scan_tensor = scan.to(device=device)
 
     # load pre-computed signed distance field
     sdf = None
@@ -515,12 +519,11 @@ def fit_single_frame(img,
                                **kwargs)
     loss = loss.to(device=device)
 
-    with fitting.FittingMonitor(
-            batch_size=batch_size, visualize=visualize, viz_mode=viz_mode, **kwargs) as monitor:
+    with fitting.FittingMonitor(batch_size=batch_size, visualize=visualize, viz_mode=viz_mode, **kwargs) as monitor:
 
         img = torch.tensor(img, dtype=dtype)
 
-        H, W, _ = img.shape
+        _, H, W, _ = img.shape
 
         # Reset the parameters to estimate the initial translation of the
         # body model
@@ -538,20 +541,21 @@ def fit_single_frame(img,
             camera_opt_params = [camera.translation, body_model.global_orient]
 
         elif camera_mode == 'fixed':
+            # body_model.reset_params()
+            # body_model.transl[:] = torch.tensor(init_t)
+            # body_model.body_pose[:] = torch.tensor(body_mean_pose)
             body_model.reset_params(body_pose=body_mean_pose, transl=init_t)
             camera_opt_params = [body_model.transl, body_model.global_orient]
 
         # If the distance between the 2D shoulders is smaller than a
         # predefined threshold then try 2 fits, the initial one and a 180
         # degree rotation
-        shoulder_dist = torch.dist(gt_joints[:, left_shoulder_idx],
-                                   gt_joints[:, right_shoulder_idx])
-        try_both_orient = shoulder_dist.item() < side_view_thsh
+        shoulder_dist = torch.norm(gt_joints[:, left_shoulder_idx, :] - gt_joints[:, right_shoulder_idx, :], dim=1)
+        try_both_orient = shoulder_dist.min() < side_view_thsh
 
-
-        camera_optimizer, camera_create_graph = optim_factory.create_optimizer(
-            camera_opt_params,
-            **kwargs)
+        kwargs['lr'] *= 10
+        camera_optimizer, camera_create_graph = optim_factory.create_optimizer(camera_opt_params, **kwargs)
+        kwargs['lr'] /= 10
 
         # The closure passed to the optimizer
         fit_camera = monitor.create_fitting_closure(
@@ -585,15 +589,16 @@ def fit_single_frame(img,
         # close the rotate the body by 180 degrees and also fit to that
         # orientation
         if try_both_orient:
-            body_orient = body_model.global_orient.detach().cpu().numpy()
-            flipped_orient = cv2.Rodrigues(body_orient)[0].dot(
-                cv2.Rodrigues(np.array([0., np.pi, 0]))[0])
-            flipped_orient = cv2.Rodrigues(flipped_orient)[0].ravel()
+            with torch.no_grad():
+                flipped_orient = torch.zeros_like(body_model.global_orient)
+                for i in range(batch_size):
+                    body_orient = body_model.global_orient[i, :].detach().cpu().numpy()
+                    local_flip = cv2.Rodrigues(body_orient)[0].dot(cv2.Rodrigues(np.array([0., np.pi, 0]))[0])
+                    local_flip = cv2.Rodrigues(local_flip)[0].ravel()
 
-            flipped_orient = torch.tensor(flipped_orient,
-                                          dtype=dtype,
-                                          device=device).unsqueeze(dim=0)
-            orientations = [body_orient, flipped_orient]
+                    flipped_orient[i, :] = torch.Tensor(local_flip).to(device)
+
+            orientations = [body_model.global_orient, flipped_orient]
         else:
             orientations = [body_model.global_orient.detach().cpu().numpy()]
 
@@ -674,8 +679,8 @@ def fit_single_frame(img,
                     use_vposer=use_vposer)
 
                 # print('Final loss val', final_loss_val)
-                if final_loss_val is None or math.isnan(final_loss_val) or math.isnan(global_vars.cur_loss_dict['total']):
-                    break
+                # if final_loss_val is None or math.isnan(final_loss_val) or math.isnan(global_vars.cur_loss_dict['total']):
+                #     break
 
                 if interactive:
                     if use_cuda and torch.cuda.is_available():
@@ -685,10 +690,10 @@ def fit_single_frame(img,
                         tqdm.write('Stage {:03d} done after {:.4f} seconds'.format(
                             opt_idx, elapsed))
 
-            if final_loss_val is None or math.isnan(final_loss_val) or math.isnan(global_vars.cur_loss_dict['total']):
-                print('Optimization FAILURE, retrying')
-                orientations.append(orientations[or_idx-1] * 0.9)
-                continue
+            # if final_loss_val is None or math.isnan(final_loss_val) or math.isnan(global_vars.cur_loss_dict['total']):
+            #     print('Optimization FAILURE, retrying')
+            #     orientations.append(orientations[or_idx-1] * 0.9)
+            #     continue
 
             if interactive:
                 if use_cuda and torch.cuda.is_available():
@@ -702,6 +707,11 @@ def fit_single_frame(img,
             # orientations, if they exist
             result = {'camera_' + str(key): val.detach().cpu().numpy()
                       for key, val in camera.named_parameters()}
+
+            result['camera_focal_length_x'] = camera.focal_length_x.detach().cpu().numpy()
+            result['camera_focal_length_y'] = camera.focal_length_y.detach().cpu().numpy()
+            result['camera_center'] = camera.center.detach().cpu().numpy()
+
             result.update({key: val.detach().cpu().numpy()
                            for key, val in body_model.named_parameters()})
             if use_vposer:
@@ -717,113 +727,122 @@ def fit_single_frame(img,
             result['loss_dict'] = global_vars.cur_loss_dict
             result['betanet_weight'] = global_vars.cur_weight
             result['betanet_height'] = global_vars.cur_height
-            result['gt_joints'] = gt_joints
+            result['gt_joints'] = gt_joints.detach().cpu().numpy()
             result['max_joint'] = global_vars.cur_max_joint
 
-            results.append({'loss': final_loss_val,
-                            'result': result})
+            results.append(result)
 
-        pkl_data = {}
-        min_loss = np.inf
-        for result in results:
-            if 1 < result['loss'] < 1e8:
-                continue    # Avoid crazy loss values
+        for idx, res_folder in enumerate(result_fn):    # Iterate over batch
+            pkl_data = {}
+            min_loss = np.inf
+            all_results = []
+            for result in results:  # Iterate over orientations
+                sel_res = misc_utils.get_data_from_batched_dict(result, idx, len(result_fn))
+                all_results.append(sel_res)
 
-            if result['loss'] < min_loss:
-                pkl_data = result['result']
-                min_loss = result['loss']
-        with open(result_fn, 'wb') as result_file:
-            pickle.dump(pkl_data, result_file, protocol=2)
+                cost = sel_res['loss_dict']['total'] + sel_res['loss_dict']['pprior'] * 60
+                if cost < min_loss:
+                    min_loss = cost
+                    pkl_data.update(sel_res)
 
-    if save_meshes or visualize:
-        # Patrick: This doesn't take the best result
-        if use_vposer:
-            pose_embedding = torch.Tensor(pkl_data['pose_embedding']).to(device=device)
+            pkl_data['all_results'] = all_results
 
-        body_pose = vposer.decode(pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
+            with open(res_folder, 'wb') as result_file:
+                pickle.dump(pkl_data, result_file, protocol=2)
 
-        model_type = kwargs.get('model_type', 'smpl')
-        append_wrists = model_type == 'smpl' and use_vposer
-        if append_wrists:
-                wrist_pose = torch.zeros([body_pose.shape[0], 6],
-                                         dtype=body_pose.dtype,
-                                         device=body_pose.device)
-                body_pose = torch.cat([body_pose, wrist_pose], dim=1)
+            img_s = img[idx, :].detach().cpu().numpy()
+            img_s = pil_img.fromarray((img_s * 255).astype(np.uint8))
+            img_s.save(out_img_fn[idx])
 
-        model_output = body_model(return_verts=True, body_pose=body_pose)
-        vertices = model_output.vertices.detach().cpu().numpy().squeeze()
-
-        import trimesh
-
-        out_mesh = trimesh.Trimesh(vertices, body_model.faces, process=False)
-        out_mesh.export(mesh_fn)
-
-    if render_results:
-        import pyrender
-
-        # common
-        H, W = 1080, 1920
-        camera_center = np.array([951.30, 536.77])
-        camera_pose = np.eye(4)
-        camera_pose = np.array([1.0, -1.0, -1.0, 1.0]).reshape(-1, 1) * camera_pose
-        camera = pyrender.camera.IntrinsicsCamera(
-            fx=1060.53, fy=1060.38,
-            cx=camera_center[0], cy=camera_center[1])
-        light = pyrender.DirectionalLight(color=np.ones(3), intensity=2.0)
-
-        material = pyrender.MetallicRoughnessMaterial(
-            metallicFactor=0.0,
-            alphaMode='OPAQUE',
-            baseColorFactor=(1.0, 1.0, 0.9, 1.0))
-        body_mesh = pyrender.Mesh.from_trimesh(
-            out_mesh, material=material)
-
-        ## rendering body
-        img = img.detach().cpu().numpy()
-        H, W, _ = img.shape
-
-        scene = pyrender.Scene(bg_color=[0.0, 0.0, 0.0, 0.0],
-                               ambient_light=(0.3, 0.3, 0.3))
-        scene.add(camera, pose=camera_pose)
-        scene.add(light, pose=camera_pose)
-        # for node in light_nodes:
-        #     scene.add_node(node)
-
-        scene.add(body_mesh, 'mesh')
-
-        r = pyrender.OffscreenRenderer(viewport_width=W,
-                                       viewport_height=H,
-                                       point_size=1.0)
-        color, _ = r.render(scene, flags=pyrender.RenderFlags.RGBA)
-        color = color.astype(np.float32) / 255.0
-
-        valid_mask = (color[:, :, -1] > 0)[:, :, np.newaxis]
-        input_img = img
-        output_img = (color[:, :, :-1] * valid_mask +
-                      (1 - valid_mask) * input_img)
-
-        img = pil_img.fromarray((output_img * 255).astype(np.uint8))
-        img.save(out_img_fn)
-
-        ##redering body+scene
-        body_mesh = pyrender.Mesh.from_trimesh(
-            out_mesh, material=material)
-        static_scene = trimesh.load(osp.join(scene_dir, scene_name + '.ply'))
-        trans = np.linalg.inv(cam2world)
-        static_scene.apply_transform(trans)
-
-        static_scene_mesh = pyrender.Mesh.from_trimesh(static_scene)
-
-        scene = pyrender.Scene()
-        scene.add(camera, pose=camera_pose)
-        scene.add(light, pose=camera_pose)
-
-        scene.add(static_scene_mesh, 'mesh')
-        scene.add(body_mesh, 'mesh')
-
-        r = pyrender.OffscreenRenderer(viewport_width=W,
-                                       viewport_height=H)
-        color, _ = r.render(scene)
-        color = color.astype(np.float32) / 255.0
-        img = pil_img.fromarray((color * 255).astype(np.uint8))
-        img.save(body_scene_rendering_fn)
+    # if save_meshes or visualize:
+    #     # Patrick: This doesn't take the best result
+    #     if use_vposer:
+    #         pose_embedding = torch.Tensor(pkl_data['pose_embedding']).to(device=device)
+    #
+    #     body_pose = vposer.decode(pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
+    #
+    #     model_type = kwargs.get('model_type', 'smpl')
+    #     append_wrists = model_type == 'smpl' and use_vposer
+    #     if append_wrists:
+    #             wrist_pose = torch.zeros([body_pose.shape[0], 6],
+    #                                      dtype=body_pose.dtype,
+    #                                      device=body_pose.device)
+    #             body_pose = torch.cat([body_pose, wrist_pose], dim=1)
+    #
+    #     model_output = body_model(return_verts=True, body_pose=body_pose)
+    #     vertices = model_output.vertices.detach().cpu().numpy().squeeze()
+    #
+    #     import trimesh
+    #
+    #     out_mesh = trimesh.Trimesh(vertices, body_model.faces, process=False)
+    #     out_mesh.export(mesh_fn)
+    #
+    # if render_results:
+    #     import pyrender
+    #
+    #     # common
+    #     H, W = 1080, 1920
+    #     camera_center = np.array([951.30, 536.77])
+    #     camera_pose = np.eye(4)
+    #     camera_pose = np.array([1.0, -1.0, -1.0, 1.0]).reshape(-1, 1) * camera_pose
+    #     camera = pyrender.camera.IntrinsicsCamera(
+    #         fx=1060.53, fy=1060.38,
+    #         cx=camera_center[0], cy=camera_center[1])
+    #     light = pyrender.DirectionalLight(color=np.ones(3), intensity=2.0)
+    #
+    #     material = pyrender.MetallicRoughnessMaterial(
+    #         metallicFactor=0.0,
+    #         alphaMode='OPAQUE',
+    #         baseColorFactor=(1.0, 1.0, 0.9, 1.0))
+    #     body_mesh = pyrender.Mesh.from_trimesh(
+    #         out_mesh, material=material)
+    #
+    #     ## rendering body
+    #     img = img.detach().cpu().numpy()
+    #     H, W, _ = img.shape
+    #
+    #     scene = pyrender.Scene(bg_color=[0.0, 0.0, 0.0, 0.0],
+    #                            ambient_light=(0.3, 0.3, 0.3))
+    #     scene.add(camera, pose=camera_pose)
+    #     scene.add(light, pose=camera_pose)
+    #     # for node in light_nodes:
+    #     #     scene.add_node(node)
+    #
+    #     scene.add(body_mesh, 'mesh')
+    #
+    #     r = pyrender.OffscreenRenderer(viewport_width=W,
+    #                                    viewport_height=H,
+    #                                    point_size=1.0)
+    #     color, _ = r.render(scene, flags=pyrender.RenderFlags.RGBA)
+    #     color = color.astype(np.float32) / 255.0
+    #
+    #     valid_mask = (color[:, :, -1] > 0)[:, :, np.newaxis]
+    #     input_img = img
+    #     output_img = (color[:, :, :-1] * valid_mask +
+    #                   (1 - valid_mask) * input_img)
+    #
+    #     img = pil_img.fromarray((output_img * 255).astype(np.uint8))
+    #     img.save(out_img_fn)
+    #
+    #     ##redering body+scene
+    #     body_mesh = pyrender.Mesh.from_trimesh(
+    #         out_mesh, material=material)
+    #     static_scene = trimesh.load(osp.join(scene_dir, scene_name + '.ply'))
+    #     trans = np.linalg.inv(cam2world)
+    #     static_scene.apply_transform(trans)
+    #
+    #     static_scene_mesh = pyrender.Mesh.from_trimesh(static_scene)
+    #
+    #     scene = pyrender.Scene()
+    #     scene.add(camera, pose=camera_pose)
+    #     scene.add(light, pose=camera_pose)
+    #
+    #     scene.add(static_scene_mesh, 'mesh')
+    #     scene.add(body_mesh, 'mesh')
+    #
+    #     r = pyrender.OffscreenRenderer(viewport_width=W,
+    #                                    viewport_height=H)
+    #     color, _ = r.render(scene)
+    #     color = color.astype(np.float32) / 255.0
+    #     img = pil_img.fromarray((color * 255).astype(np.uint8))
+    #     img.save(body_scene_rendering_fn)

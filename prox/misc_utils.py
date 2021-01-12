@@ -32,6 +32,37 @@ from PIL import Image, ImageFont, ImageDraw
 import open3d as o3d
 
 
+def get_data_from_batched_dict(in_dict, batch_idx, batch_n):
+    out_dict = dict()
+    out_dict['batch_idx'] = batch_idx
+
+    for key, value in in_dict.items():
+        if torch.is_tensor(value):
+            value = value.detach().cpu().numpy()
+
+        if isinstance(value, np.ndarray) and len(value.shape) >= 1 and value.shape[0] == batch_n:
+            out_dict[key] = value[batch_idx, ...]
+        elif isinstance(value, dict):
+            out_dict[key] = get_data_from_batched_dict(value, batch_idx, batch_n)
+        else:
+            out_dict[key] = value
+
+    return out_dict
+
+
+def batched_index_select(t, dim, inds):
+    """
+    Helper function to extract batch-varying indicies along array
+    :param t: array to select from
+    :param dim: dimension to select along
+    :param inds: batch-vary indicies
+    :return:
+    """
+    dummy = inds.unsqueeze(2).expand(inds.size(0), inds.size(1), t.size(2))
+    out = t.gather(dim, dummy) # b x e x f
+    return out
+
+
 def text_3d(text, pos, direction=None, degree=-90.0, density=10, font='/usr/share/fonts/truetype/freefont/FreeMono.ttf', font_size=10):
     """
     Generate a Open3D text point cloud used for visualization.
