@@ -278,8 +278,11 @@ def fit_single_frame(img,
         #                         3.61178756e-01,  2.76136428e-01, -2.64388829e-01,  0.00000000e+00,
         #                         0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00,
         #                         0.00000000e+00]])
-        mean_body = np.array(joint_limits.axang_limits_patrick / 180 * np.pi).mean(1)
-        body_mean_pose = torch.tensor(mean_body, dtype=dtype).unsqueeze(0)
+
+        # mean_body = np.array(joint_limits.axang_limits_patrick / 180 * np.pi).mean(1)
+        # body_mean_pose = torch.tensor(mean_body, dtype=dtype).unsqueeze(0)
+
+        body_mean_pose = joint_limits.get_initialization_pose()
 
 
     betanet = None

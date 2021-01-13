@@ -1,7 +1,6 @@
 .idea/
 *.obj
 *.pkl
-*.json
 *.pyc
 quantitative/
 qualitative/

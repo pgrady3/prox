@@ -11,8 +11,8 @@ axang_limits_patrick = np.array(  # In degrees
     [
      # [-140, 10], [-60, 120], [-40, 60],  # Hip L 0
      # [-140, 10], [-120, 60], [-60, 40],  # Hip R
-     [-120., 10.], [-60., 120.], [-60., 60.],   # Hip L henry
-     [-120., 10.], [-120., 60.], [-60., 60.],   # Hip R henry
+     [-140., 10.], [-60., 120.], [-60., 60.],   # Hip L henry
+     [-140., 10.], [-120., 60.], [-60., 60.],   # Hip R henry
      [-30., 110.], [-8., 8.], [-8., 8.],  # Lower back
      [-1.3, 139.9], [-0.6, 0.6], [-0.6, 0.6],  # Knee L
      [-1.3, 139.9], [-0.6, 0.6], [-0.6, 0.6],  # Knee R
@@ -25,13 +25,13 @@ axang_limits_patrick = np.array(  # In degrees
      [-25., 45.], [-15., 15.], [-20., 20.],  # Lower neck
      # [-40., 50], [-50, 20], [-40., 50],  # Inner shoulder L
      # [-40., 50], [-20, 50], [-50, 40.],  # Inner shoulder R
-     [-40., 40.], [-50., 20.], [-40., 40.],  # Inner shoulder L
-     [-40., 40.], [-20., 50.], [-40., 40.],  # Inner shoulder R
+     [-50., 40.], [-50., 20.], [-40., 40.],  # Inner shoulder L
+     [-50., 40.], [-20., 50.], [-40., 40.],  # Inner shoulder R
      [-15., 45.], [-5., 5.], [-5., 5.],  # Upper neck
      # [-70., 70], [-90, 35], [-90., 50],  # Outer shoulder L 15
      # [-70., 70], [-35, 90], [-50, 90.],  # Outer shoulder R
-     [-70., 70.], [-90., 35.], [-90., 60.],  # Outer shoulder L 15
-     [-70., 70.], [-30., 90.], [-60., 90.],  # Outer shoulder R
+     [-80., 70.], [-90., 35.], [-90., 60.],  # Outer shoulder L 15
+     [-80., 70.], [-30., 90.], [-60., 90.],  # Outer shoulder R
      [-0.6, 0.6], [-160, 2.7], [-0.6, 0.6],  # Elbow L
      [-0.6, 0.6], [-2.7, 160], [-0.6, 0.6],  # Elbow R
      [-30., 30.], [-15., 15.], [-30., 30.],  # Wrist L
@@ -41,10 +41,38 @@ axang_limits_patrick = np.array(  # In degrees
 )
 
 
-def get_smpl(joints, axes, amounts, translation=(0, 0, 0)):
+def get_initialization_pose():
+    axang_limits = torch.tensor(axang_limits_patrick / 180 * np.pi, dtype=torch.float)
+    axang_mean = axang_limits.detach().mean(1)
+    axang_var = torch.abs(axang_limits[:, 1] - axang_mean)
+
+    axang_home = axang_mean.detach().clone()
+
+    axang_home[15 * 3 + 0] -= axang_var[15 * 3 + 0] * 0.7
+    axang_home[16 * 3 + 0] -= axang_var[16 * 3 + 0] * 0.7
+
+    return axang_home.unsqueeze(0)
+
+
+def view_initialization_pose():
+    vis = o3d.Visualizer()
+    vis.create_window()
+    vis.add_geometry(get_smpl([0], [0], [0.5], starting_pose=get_initialization_pose()))
+
+    vis.add_geometry(text_3d('Home pose', (0, 1, 0), font_size=200, density=0.2))
+
+    vis.run()
+    vis.destroy_window()
+
+
+def get_smpl(joints, axes, amounts, translation=(0, 0, 0), starting_pose=None):
     model = smplx.create('models', model_type='smpl', gender='male')
 
-    body_pose = torch.zeros([1, 69])
+    if starting_pose is not None:
+        body_pose = torch.Tensor(starting_pose)
+    else:
+        body_pose = torch.zeros([1, 69])
+
     for i in range(len(joints)):
         pose_index = int(joints[i] * 3 + axes[i])
         body_pose[0, pose_index] = axang_mean[pose_index] + axang_var[pose_index] * (amounts[i] * 2 - 1)
@@ -65,7 +93,7 @@ def view_fit(joint, translation=(0, 0, 0)):
     translation = np.array(translation)
     vis = o3d.Visualizer()
     vis.create_window()
-    vis.add_geometry(get_smpl([joint], [0], [0.5], translation=translation))
+    vis.add_geometry(get_smpl([joint], [0], [0.5], translation=translation, mean=False))
 
     for i in range(6):
         trans = translation + (int(i/2)*1.5 + 1, 0, 0)
@@ -91,9 +119,11 @@ def view_multi(joints, axes, amounts):
 
 
 if __name__ == "__main__":
-    axang_limits = torch.tensor(axang_limits_patrick / 180 * np.pi)
+    axang_limits = torch.tensor(axang_limits_patrick / 180 * np.pi, dtype=torch.float)
     axang_mean = axang_limits.detach().mean(1)
     axang_var = torch.abs(axang_limits[:, 1] - axang_mean)
+
+    view_initialization_pose()
 
     # view_multi([2, 5, 8], [0, 0, 0], [0, 0, 0]) # Back
     # view_multi([2, 5, 8], [0, 0, 0], [1, 1, 1])
@@ -102,20 +132,19 @@ if __name__ == "__main__":
     # view_multi([2, 5, 8], [2, 2, 2], [0, 0, 0]) # Back
     # view_multi([2, 5, 8], [2, 2, 2], [1, 1, 1])
 
-    view_multi([11, 14], [0, 0], [0, 0]) # Neck
-    view_multi([11, 14], [0, 0], [1, 1]) # Neck
-    view_multi([11, 14], [1, 1], [0, 0]) # Neck
-    view_multi([11, 14], [1, 1], [1, 1]) # Neck
-    view_multi([11, 14], [2, 2], [0, 0]) # Neck
-    view_multi([11, 14], [2, 2], [1, 1]) # Neck
+    # view_multi([11, 14], [0, 0], [0, 0]) # Neck
+    # view_multi([11, 14], [0, 0], [1, 1]) # Neck
+    # view_multi([11, 14], [1, 1], [0, 0]) # Neck
+    # view_multi([11, 14], [1, 1], [1, 1]) # Neck
+    # view_multi([11, 14], [2, 2], [0, 0]) # Neck
+    # view_multi([11, 14], [2, 2], [1, 1]) # Neck
 
-    # view_multi([12, 15, 17], [0, 0, 1], [0, 0, 0.5]) # Shoulder
-    # view_multi([12, 15, 17], [0, 0, 1], [1, 1, 0.5]) # Shoulder
-    # view_multi([12, 15, 17], [1, 1, 1], [0, 0, 0.5]) # Shoulder
-    # view_multi([12, 15, 17], [1, 1, 1], [1, 1, 0.5]) # Shoulder
-    # view_multi([12, 15, 17], [2, 2, 1], [0, 0, 0.5]) # Shoulder
-    # view_multi([12, 15, 17], [2, 2, 1], [1, 1, 0.5]) # Shoulder
-
+    view_multi([12, 15, 17], [0, 0, 1], [0, 0, 0.5]) # Shoulder
+    view_multi([12, 15, 17], [0, 0, 1], [1, 1, 0.5]) # Shoulder
+    view_multi([12, 15, 17], [1, 1, 1], [0, 0, 0.5]) # Shoulder
+    view_multi([12, 15, 17], [1, 1, 1], [1, 1, 0.5]) # Shoulder
+    view_multi([12, 15, 17], [2, 2, 1], [0, 0, 0.5]) # Shoulder
+    view_multi([12, 15, 17], [2, 2, 1], [1, 1, 0.5]) # Shoulder
 
     for i in range(0, 23):
         view_fit(i)
