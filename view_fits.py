@@ -15,6 +15,7 @@ import trimesh
 from prox.misc_utils import text_3d
 import matplotlib.cm as cm
 from prox.camera import PerspectiveCamera
+from prox.misc_utils import smpl_to_openpose
 import pprint
 
 
@@ -101,13 +102,19 @@ def get_smpl(pkl_data, json_data):
                                focal_length_x=torch.tensor(pkl_data['camera_focal_length_x']),
                                focal_length_y=torch.tensor(pkl_data['camera_focal_length_y']))
 
-    gt_pos_3d = camera.inverse_camera_tform(torch.tensor(pkl_data['gt_joints']).unsqueeze(0), 1.8).detach().squeeze(0).cpu().numpy()
-
     all_markers = []
+    z_depth = 1.9
+    gt_pos_3d = camera.inverse_camera_tform(torch.tensor(pkl_data['gt_joints']).unsqueeze(0), z_depth).detach().squeeze(0).cpu().numpy()
+
+    # all_markers.append(get_o3d_sphere(pos=pkl_data['camera_translation']))    # Add dot where camera should be, but it screws up point cloud coloring
     for i in range(25):
-        color = cm.jet(i / 25.0)[:3]
-        # smpl_marker = get_o3d_sphere(color=color, pos=smpl_joints[i, :])
-        # all_markers.append(smpl_marker)
+        if np.all(pkl_data['gt_joints'][i, :] == 0):
+            continue
+
+        cmap_val = (i / 25.0 * 3) % 1
+        color = cm.jet(cmap_val)[:3]
+        smpl_marker = get_o3d_sphere(color=color, pos=smpl_joints[smpl_to_openpose('smpl')[i], :], radius=0.05)
+        all_markers.append(smpl_marker)
 
         pred_marker = get_o3d_sphere(color=color, pos=gt_pos_3d[i, :], radius=0.03)
         all_markers.append(pred_marker)
@@ -155,8 +162,9 @@ def get_o3d_sphere(color=[0.3, 1.0, 0.3], pos=[0, 0, 0], radius=0.06):
 
 
 def view_fit(sample, idx):
-    # if sample[0] < 5 or sample[2] < 32:
+    # if sample[0] < 4 or sample[2] < 43:
     #     return
+
     pkl_path = os.path.join(FITS_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'results', 'image_{:06d}'.format(sample[2]), '000.pkl')
     if not os.path.exists(pkl_path):
         return

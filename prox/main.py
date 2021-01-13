@@ -191,6 +191,13 @@ def main(**args):
 
     # A weight for every joint of the model
     joint_weights = dataset_obj.get_joint_weights().to(device=device, dtype=dtype)
+
+    # Patrick: Hack, inflate the weight of hands and elbows
+    inflate_amount = 3
+    for id in [3, 4, 6, 7]:
+        print('Inflating joint', id)
+        joint_weights[id] = inflate_amount
+
     # Add a fake batch dimension for broadcasting
     joint_weights.unsqueeze_(dim=0)
 
