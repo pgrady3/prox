@@ -533,9 +533,12 @@ class SMPLifyLoss(nn.Module):
                 **kwargs):
         batch_size = gt_joints.shape[0]
 
-        forehead_vert_id = 336      # Patrick: replace head joint with a vertex on the head
         model_joints = body_model_output.joints
-        model_joints[:, 0, :] = body_model_output.vertices[:, forehead_vert_id, :]
+
+        # forehead_vert_id = 336      # Patrick: replace head joint with a vertex on the head
+        # model_joints[:, 0, :] = body_model_output.vertices[:, forehead_vert_id, :]
+
+        model_joints[:, 0, :] = model_joints[:, 17:19, :].mean(1)   # Patrick: replace head with average of ears
 
         projected_joints = camera(model_joints)
         # Calculate the weights for each joints
