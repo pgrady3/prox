@@ -17,6 +17,7 @@ import matplotlib.cm as cm
 from prox.camera import PerspectiveCamera
 from prox.misc_utils import smpl_to_openpose
 import pprint
+import argparse
 
 
 SLP_PATH = '/home/patrick/datasets/SLP/danaLab'
@@ -90,7 +91,7 @@ def get_smpl(pkl_data, json_data):
 
     smpl_o3d_2 = o3d.TriangleMesh()
     smpl_o3d_2.triangles = o3d.Vector3iVector(model.faces)
-    smpl_o3d_2.vertices = o3d.Vector3dVector(smpl_vertices + np.array([1.5, 0, 0]))
+    smpl_o3d_2.vertices = o3d.Vector3dVector(smpl_vertices + np.array([1.3, 0, 0]))
     smpl_o3d_2.compute_vertex_normals()
     smpl_o3d_2.paint_uniform_color([0.7, 0.3, 0.3])
 
@@ -103,9 +104,6 @@ def get_smpl(pkl_data, json_data):
                                focal_length_y=torch.tensor(pkl_data['camera_focal_length_y']))
 
     all_markers = []
-    z_depth = 1.9
-    gt_pos_3d = camera.inverse_camera_tform(torch.tensor(pkl_data['gt_joints']).unsqueeze(0), z_depth).detach().squeeze(0).cpu().numpy()
-
     # all_markers.append(get_o3d_sphere(pos=pkl_data['camera_translation']))    # Add dot where camera should be, but it screws up point cloud coloring
     for i in range(25):
         if np.all(pkl_data['gt_joints'][i, :] == 0):
@@ -113,8 +111,11 @@ def get_smpl(pkl_data, json_data):
 
         cmap_val = (i / 25.0 * 3) % 1
         color = cm.jet(cmap_val)[:3]
-        smpl_marker = get_o3d_sphere(color=color, pos=smpl_joints[smpl_to_openpose('smpl')[i], :], radius=0.05)
+        smpl_marker = get_o3d_sphere(color=color, pos=smpl_joints[smpl_to_openpose('smpl')[i], :], radius=0.07)
         all_markers.append(smpl_marker)
+
+        z_depth = smpl_joints[smpl_to_openpose('smpl')[i], 2] - 0.15
+        gt_pos_3d = camera.inverse_camera_tform(torch.tensor(pkl_data['gt_joints']).unsqueeze(0), z_depth).detach().squeeze(0).cpu().numpy()
 
         pred_marker = get_o3d_sphere(color=color, pos=gt_pos_3d[i, :], radius=0.03)
         all_markers.append(pred_marker)
@@ -147,6 +148,8 @@ def get_rgb(sample):
     rgbd_image = o3d.geometry.create_rgbd_image_from_color_and_depth(rgb_image, depth_image, depth_scale=1)
     rgbd_ptc = o3d.geometry.create_point_cloud_from_rgbd_image(rgbd_image,
                 o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.Kinect2ColorCameraDefault))
+
+    # intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.Kinect2ColorCameraDefault)
 
     return rgbd_ptc
 
@@ -187,7 +190,7 @@ def view_fit(sample, idx):
     vis.add_geometry(smpl_mesh_calc)
     vis.add_geometry(rgbd_ptc)
     lbl = 'Participant {} sample {}'.format(sample[0], sample[2])
-    vis.add_geometry(text_3d(lbl, (-0.5, -1.5, 2), direction=(0.01, 0, -1), degree=-90, font_size=200, density=0.2))
+    vis.add_geometry(text_3d(lbl, (-0.5, 1.0, 2), direction=(0.01, 0, -1), degree=-90, font_size=150, density=0.2))
 
     for j in joint_markers:
         vis.add_geometry(j)
@@ -204,17 +207,23 @@ def view_fit(sample, idx):
     print('\n')
 
 
-def make_dataset():
+def make_dataset(skip_sample=0, skip_participant=0):
     all_samples = SLP_dataset.pthDesc_li
 
     for idx, sample in enumerate(tqdm(all_samples)):
-        view_fit(sample, idx)
+        if sample[0] < skip_participant or sample[2] < skip_sample:
+            continue
 
-        # if idx > 5:
-        #     break
+        view_fit(sample, idx)
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--sample', type=int, default=0)
+    parser.add_argument('--participant', type=int, default=0)
+    args = parser.parse_args()
+
     class PseudoOpts:
         SLP_fd = SLP_PATH
         sz_pch = [256, 256]
@@ -222,4 +231,4 @@ if __name__ == "__main__":
         cov_li = ['uncover']  # give the cover class you want here
     SLP_dataset = SLP_RD(PseudoOpts, phase='all')  # all test result
 
-    make_dataset()
+    make_dataset(skip_sample=args.sample, skip_participant=args.participant)
