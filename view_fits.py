@@ -116,7 +116,13 @@ def get_smpl(pkl_data, json_data):
 
         cmap_val = (i / 25.0 * 3) % 1
         color = cm.jet(cmap_val)[:3]
-        smpl_marker = get_o3d_sphere(color=color, pos=smpl_joints[smpl_to_openpose('smpl')[i], :], radius=0.07)
+
+        pos = smpl_joints[smpl_to_openpose('smpl')[i], :]
+        if i == 0:
+            ear_joints = smpl_to_openpose('smpl')[17:19]    # Get left and right ear
+            pos = smpl_joints[ear_joints, :].mean(0)
+
+        smpl_marker = get_o3d_sphere(color=color, pos=pos, radius=0.07)
         all_markers.append(smpl_marker)
 
         z_depth = smpl_joints[smpl_to_openpose('smpl')[i], 2] - 0.20
@@ -225,8 +231,8 @@ def make_dataset(skip_sample=0, skip_participant=0):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--sample', type=int, default=0)
-    parser.add_argument('--participant', type=int, default=0)
+    parser.add_argument('-s', '--sample', type=int, default=0)
+    parser.add_argument('-p', '--participant', type=int, default=0)
     args = parser.parse_args()
 
     class PseudoOpts:

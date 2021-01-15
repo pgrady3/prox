@@ -351,6 +351,8 @@ if __name__ == "__main__":
         all_recordings = glob('slp_tform/recordings/*/')
         all_recordings.sort()
 
+        # all_recordings = all_recordings[14:]  # Start partway through the dataset
+
         for recording in all_recordings:
             args['recording_dir'] = recording[:-1]
             print(args['recording_dir'])
