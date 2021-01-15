@@ -254,35 +254,36 @@ def fit_single_frame(img,
         vposer = vposer.to(device=device)
         vposer.eval()
 
-    if use_vposer:
-        body_mean_pose = torch.zeros([batch_size, vposer_latent_dim], dtype=dtype)
-    else:
-        # body_mean_pose = body_pose_prior.get_mean().detach().cpu()
-        # body_mean_pose = torch.zeros([batch_size, 69], dtype=dtype)
-
-        # mean_body =  np.array([[-2.33263850e-01,  1.35460928e-01,  2.94471830e-01, -3.22930813e-01,
-        #                         -4.73931670e-01, -2.67531037e-01,  7.12558180e-02,  7.89440796e-03,
-        #                         8.67700949e-03,  1.05982251e-01,  2.79584467e-01, -7.04243258e-02,
-        #                         3.61106455e-01, -5.87305248e-01,  1.10897996e-01, -1.68918714e-01,
-        #                         -4.60174456e-02,  3.28684039e-02,  5.80525696e-01, -5.11317095e-03,
-        #                         -1.57546505e-01,  5.85777402e-01, -8.94948393e-02,  2.24680841e-01,
-        #                         1.55473784e-01,  5.38146123e-04,  4.30279821e-02, -4.68525589e-02,
-        #                         7.75185153e-02,  7.82282930e-03,  6.74356073e-02,  4.09710407e-02,
-        #                         -3.60425897e-02, -4.71813440e-01,  5.02379127e-02,  2.02309843e-02,
-        #                         5.29680364e-02,  1.68510173e-02,  2.25090146e-01, -4.52307612e-02,
-        #                         7.72185996e-02, -2.17333943e-01,  3.30020368e-01,  4.21866514e-02,
-        #                         7.15153441e-02,  3.05950731e-01, -3.63454908e-01, -1.28235269e+00,
-        #                         5.09610713e-01,  4.65482563e-01,  1.20263052e+00,  5.56594551e-01,
-        #                         -2.24000740e+00,  3.83565158e-01,  5.31355202e-01,  2.21637583e+00,
-        #                         -5.63146770e-01, -3.01193684e-01, -4.31942672e-01,  6.85038209e-01,
-        #                         3.61178756e-01,  2.76136428e-01, -2.64388829e-01,  0.00000000e+00,
-        #                         0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00,
-        #                         0.00000000e+00]])
-
-        # mean_body = np.array(joint_limits.axang_limits_patrick / 180 * np.pi).mean(1)
-        # body_mean_pose = torch.tensor(mean_body, dtype=dtype).unsqueeze(0)
-
-        body_mean_pose = joint_limits.get_initialization_pose()
+    # This is handled later
+    # if use_vposer:
+    #     body_mean_pose = torch.zeros([batch_size, vposer_latent_dim], dtype=dtype)
+    # else:
+    #     # body_mean_pose = body_pose_prior.get_mean().detach().cpu()
+    #     # body_mean_pose = torch.zeros([batch_size, 69], dtype=dtype)
+    #
+    #     # mean_body =  np.array([[-2.33263850e-01,  1.35460928e-01,  2.94471830e-01, -3.22930813e-01,
+    #     #                         -4.73931670e-01, -2.67531037e-01,  7.12558180e-02,  7.89440796e-03,
+    #     #                         8.67700949e-03,  1.05982251e-01,  2.79584467e-01, -7.04243258e-02,
+    #     #                         3.61106455e-01, -5.87305248e-01,  1.10897996e-01, -1.68918714e-01,
+    #     #                         -4.60174456e-02,  3.28684039e-02,  5.80525696e-01, -5.11317095e-03,
+    #     #                         -1.57546505e-01,  5.85777402e-01, -8.94948393e-02,  2.24680841e-01,
+    #     #                         1.55473784e-01,  5.38146123e-04,  4.30279821e-02, -4.68525589e-02,
+    #     #                         7.75185153e-02,  7.82282930e-03,  6.74356073e-02,  4.09710407e-02,
+    #     #                         -3.60425897e-02, -4.71813440e-01,  5.02379127e-02,  2.02309843e-02,
+    #     #                         5.29680364e-02,  1.68510173e-02,  2.25090146e-01, -4.52307612e-02,
+    #     #                         7.72185996e-02, -2.17333943e-01,  3.30020368e-01,  4.21866514e-02,
+    #     #                         7.15153441e-02,  3.05950731e-01, -3.63454908e-01, -1.28235269e+00,
+    #     #                         5.09610713e-01,  4.65482563e-01,  1.20263052e+00,  5.56594551e-01,
+    #     #                         -2.24000740e+00,  3.83565158e-01,  5.31355202e-01,  2.21637583e+00,
+    #     #                         -5.63146770e-01, -3.01193684e-01, -4.31942672e-01,  6.85038209e-01,
+    #     #                         3.61178756e-01,  2.76136428e-01, -2.64388829e-01,  0.00000000e+00,
+    #     #                         0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00,
+    #     #                         0.00000000e+00]])
+    #
+    #     # mean_body = np.array(joint_limits.axang_limits_patrick / 180 * np.pi).mean(1)
+    #     # body_mean_pose = torch.tensor(mean_body, dtype=dtype).unsqueeze(0)
+    #
+    #     body_mean_pose = joint_limits.get_initialization_pose()
 
 
     betanet = None
@@ -522,240 +523,245 @@ def fit_single_frame(img,
                                **kwargs)
     loss = loss.to(device=device)
 
+    results = []
+
     with fitting.FittingMonitor(batch_size=batch_size, visualize=visualize, viz_mode=viz_mode, **kwargs) as monitor:
 
         img = torch.tensor(img, dtype=dtype)
 
         _, H, W, _ = img.shape
 
-        # Reset the parameters to estimate the initial translation of the
-        # body model
-        if camera_mode == 'moving':
-            body_model.reset_params(body_pose=body_mean_pose)
-            # Update the value of the translation of the camera as well as
-            # the image center.
-            with torch.no_grad():
-                camera.translation[:] = init_t.view_as(camera.translation)
-                camera.center[:] = torch.tensor([W, H], dtype=dtype) * 0.5
+        for body_mean_idx in range(joint_limits.NUM_MODES):
+            body_mean_pose = joint_limits.get_initialization_pose(body_mean_idx)
 
-            # Re-enable gradient calculation for the camera translation
-            camera.translation.requires_grad = True
-
-            camera_opt_params = [camera.translation, body_model.global_orient]
-
-        elif camera_mode == 'fixed':
-            # body_model.reset_params()
-            # body_model.transl[:] = torch.tensor(init_t)
-            # body_model.body_pose[:] = torch.tensor(body_mean_pose)
-            body_model.reset_params(body_pose=body_mean_pose, transl=init_t)
-            camera_opt_params = [body_model.transl, body_model.global_orient]
-
-        # If the distance between the 2D shoulders is smaller than a
-        # predefined threshold then try 2 fits, the initial one and a 180
-        # degree rotation
-        shoulder_dist = torch.norm(gt_joints[:, left_shoulder_idx, :] - gt_joints[:, right_shoulder_idx, :], dim=1)
-        try_both_orient = shoulder_dist.min() < side_view_thsh
-
-        kwargs['lr'] *= 10
-        camera_optimizer, camera_create_graph = optim_factory.create_optimizer(camera_opt_params, **kwargs)
-        kwargs['lr'] /= 10
-
-        # The closure passed to the optimizer
-        fit_camera = monitor.create_fitting_closure(
-            camera_optimizer, body_model, camera, gt_joints,
-            camera_loss, create_graph=camera_create_graph,
-            use_vposer=use_vposer, vposer=vposer,
-            pose_embedding=pose_embedding,
-            scan_tensor=scan_tensor,
-            return_full_pose=False, return_verts=False)
-
-        # Step 1: Optimize over the torso joints the camera translation
-        # Initialize the computational graph by feeding the initial translation
-        # of the camera and the initial pose of the body model.
-        camera_init_start = time.time()
-        cam_init_loss_val = monitor.run_fitting(camera_optimizer,
-                                                fit_camera,
-                                                camera_opt_params, body_model,
-                                                use_vposer=use_vposer,
-                                                pose_embedding=pose_embedding,
-                                                vposer=vposer)
-
-        if interactive:
-            if use_cuda and torch.cuda.is_available():
-                torch.cuda.synchronize()
-            tqdm.write('Camera initialization done after {:.4f}'.format(
-                time.time() - camera_init_start))
-            tqdm.write('Camera initialization final loss {:.4f}'.format(
-                cam_init_loss_val))
-
-        # If the 2D detections/positions of the shoulder joints are too
-        # close the rotate the body by 180 degrees and also fit to that
-        # orientation
-        if try_both_orient:
-            with torch.no_grad():
-                flipped_orient = torch.zeros_like(body_model.global_orient)
-                for i in range(batch_size):
-                    body_orient = body_model.global_orient[i, :].detach().cpu().numpy()
-                    local_flip = cv2.Rodrigues(body_orient)[0].dot(cv2.Rodrigues(np.array([0., np.pi, 0]))[0])
-                    local_flip = cv2.Rodrigues(local_flip)[0].ravel()
-
-                    flipped_orient[i, :] = torch.Tensor(local_flip).to(device)
-
-            orientations = [body_model.global_orient, flipped_orient]
-        else:
-            orientations = [body_model.global_orient.detach().cpu().numpy()]
-
-        # store here the final error for both orientations,
-        # and pick the orientation resulting in the lowest error
-        results = []
-        body_transl = body_model.transl.clone().detach()
-        # Step 2: Optimize the full model
-        final_loss_val = 0
-
-        # for or_idx, orient in enumerate(orientations):
-        or_idx = 0
-        while or_idx < len(orientations):
-            global_vars.cur_orientation = or_idx
-            orient = orientations[or_idx]
-            print('Trying orientation', or_idx, 'of', len(orientations))
-            opt_start = time.time()
-            or_idx += 1
-
-            new_params = defaultdict(transl=body_transl,
-                                     global_orient=orient,
-                                     body_pose=body_mean_pose)
-            body_model.reset_params(**new_params)
-            if use_vposer:
+            # Reset the parameters to estimate the initial translation of the
+            # body model
+            if camera_mode == 'moving':
+                body_model.reset_params(body_pose=body_mean_pose)
+                # Update the value of the translation of the camera as well as
+                # the image center.
                 with torch.no_grad():
-                    pose_embedding.fill_(0)
-                    pose_embedding += torch.tensor(mean_body, dtype=dtype, device=device)
+                    camera.translation[:] = init_t.view_as(camera.translation)
+                    camera.center[:] = torch.tensor([W, H], dtype=dtype) * 0.5
 
-            for opt_idx, curr_weights in enumerate(opt_weights):
-                global_vars.cur_opt_stage = opt_idx
+                # Re-enable gradient calculation for the camera translation
+                camera.translation.requires_grad = True
 
-                if opt_idx not in trans_opt_stages:
-                    body_model.transl.requires_grad = False
-                else:
-                    body_model.transl.requires_grad = True
-                body_params = list(body_model.parameters())
+                camera_opt_params = [camera.translation, body_model.global_orient]
 
-                final_params = list(
-                    filter(lambda x: x.requires_grad, body_params))
+            elif camera_mode == 'fixed':
+                # body_model.reset_params()
+                # body_model.transl[:] = torch.tensor(init_t)
+                # body_model.body_pose[:] = torch.tensor(body_mean_pose)
+                body_model.reset_params(body_pose=body_mean_pose, transl=init_t)
+                camera_opt_params = [body_model.transl, body_model.global_orient]
 
-                if use_vposer:
-                    final_params.append(pose_embedding)
+            # If the distance between the 2D shoulders is smaller than a
+            # predefined threshold then try 2 fits, the initial one and a 180
+            # degree rotation
+            # shoulder_dist = torch.norm(gt_joints[:, left_shoulder_idx, :] - gt_joints[:, right_shoulder_idx, :], dim=1)
+            # try_both_orient = shoulder_dist.min() < side_view_thsh
+            try_both_orient = True
 
-                body_optimizer, body_create_graph = optim_factory.create_optimizer(
-                    final_params,
-                    **kwargs)
-                body_optimizer.zero_grad()
+            kwargs['lr'] *= 10
+            camera_optimizer, camera_create_graph = optim_factory.create_optimizer(camera_opt_params, **kwargs)
+            kwargs['lr'] /= 10
 
-                curr_weights['bending_prior_weight'] = (
-                    3.17 * curr_weights['body_pose_weight'])
-                if use_hands:
-                    joint_weights[:, 25:76] = curr_weights['hand_weight']
-                if use_face:
-                    joint_weights[:, 76:] = curr_weights['face_weight']
-                loss.reset_loss_weights(curr_weights)
+            # The closure passed to the optimizer
+            fit_camera = monitor.create_fitting_closure(
+                camera_optimizer, body_model, camera, gt_joints,
+                camera_loss, create_graph=camera_create_graph,
+                use_vposer=use_vposer, vposer=vposer,
+                pose_embedding=pose_embedding,
+                scan_tensor=scan_tensor,
+                return_full_pose=False, return_verts=False)
 
-                closure = monitor.create_fitting_closure(
-                    body_optimizer, body_model,
-                    camera=camera, gt_joints=gt_joints,
-                    joints_conf=joints_conf,
-                    joint_weights=joint_weights,
-                    loss=loss, create_graph=body_create_graph,
-                    use_vposer=use_vposer, vposer=vposer,
-                    pose_embedding=pose_embedding,
-                    scan_tensor=scan_tensor,
-                    scene_v=scene_v, scene_vn=scene_vn, scene_f=scene_f,ftov=ftov,
-                    return_verts=True, return_full_pose=True)
-
-                if interactive:
-                    if use_cuda and torch.cuda.is_available():
-                        torch.cuda.synchronize()
-                    stage_start = time.time()
-                final_loss_val = monitor.run_fitting(
-                    body_optimizer,
-                    closure, final_params,
-                    body_model,
-                    pose_embedding=pose_embedding, vposer=vposer,
-                    use_vposer=use_vposer)
-
-                # print('Final loss val', final_loss_val)
-                # if final_loss_val is None or math.isnan(final_loss_val) or math.isnan(global_vars.cur_loss_dict['total']):
-                #     break
-
-                if interactive:
-                    if use_cuda and torch.cuda.is_available():
-                        torch.cuda.synchronize()
-                    elapsed = time.time() - stage_start
-                    if interactive:
-                        tqdm.write('Stage {:03d} done after {:.4f} seconds'.format(
-                            opt_idx, elapsed))
-
-            # if final_loss_val is None or math.isnan(final_loss_val) or math.isnan(global_vars.cur_loss_dict['total']):
-            #     print('Optimization FAILURE, retrying')
-            #     orientations.append(orientations[or_idx-1] * 0.9)
-            #     continue
+            # Step 1: Optimize over the torso joints the camera translation
+            # Initialize the computational graph by feeding the initial translation
+            # of the camera and the initial pose of the body model.
+            camera_init_start = time.time()
+            cam_init_loss_val = monitor.run_fitting(camera_optimizer,
+                                                    fit_camera,
+                                                    camera_opt_params, body_model,
+                                                    use_vposer=use_vposer,
+                                                    pose_embedding=pose_embedding,
+                                                    vposer=vposer)
 
             if interactive:
                 if use_cuda and torch.cuda.is_available():
                     torch.cuda.synchronize()
-                elapsed = time.time() - opt_start
-                tqdm.write('Body fitting Orientation {} done after {:.4f} seconds'.format(or_idx, elapsed))
-                tqdm.write('Body final loss val = {:.5f}'.format(final_loss_val))
+                tqdm.write('Camera initialization done after {:.4f}'.format(
+                    time.time() - camera_init_start))
+                tqdm.write('Camera initialization final loss {:.4f}'.format(
+                    cam_init_loss_val))
 
-            # Get the result of the fitting process
-            # Store in it the errors list in order to compare multiple
-            # orientations, if they exist
-            result = {'camera_' + str(key): val.detach().cpu().numpy()
-                      for key, val in camera.named_parameters()}
+            # If the 2D detections/positions of the shoulder joints are too
+            # close the rotate the body by 180 degrees and also fit to that
+            # orientation
+            if try_both_orient:
+                with torch.no_grad():
+                    flipped_orient = torch.zeros_like(body_model.global_orient)
+                    for i in range(batch_size):
+                        body_orient = body_model.global_orient[i, :].detach().cpu().numpy()
+                        local_flip = cv2.Rodrigues(body_orient)[0].dot(cv2.Rodrigues(np.array([0., np.pi, 0]))[0])
+                        local_flip = cv2.Rodrigues(local_flip)[0].ravel()
 
-            result['camera_focal_length_x'] = camera.focal_length_x.detach().cpu().numpy()
-            result['camera_focal_length_y'] = camera.focal_length_y.detach().cpu().numpy()
-            result['camera_center'] = camera.center.detach().cpu().numpy()
+                        flipped_orient[i, :] = torch.Tensor(local_flip).to(device)
 
-            result.update({key: val.detach().cpu().numpy()
-                           for key, val in body_model.named_parameters()})
-            if use_vposer:
-                result['pose_embedding'] = pose_embedding.detach().cpu().numpy()
-                body_pose = vposer.decode(pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
+                orientations = [body_model.global_orient, flipped_orient]
+            else:
+                orientations = [body_model.global_orient.detach().cpu().numpy()]
 
-                if "smplx.body_models.SMPL'" in str(type(body_model)):
-                    wrist_pose = torch.zeros([body_pose.shape[0], 6], dtype=body_pose.dtype, device=body_pose.device)
-                    body_pose = torch.cat([body_pose, wrist_pose], dim=1)
+            # store here the final error for both orientations,
+            # and pick the orientation resulting in the lowest error
+            body_transl = body_model.transl.clone().detach()
+            # Step 2: Optimize the full model
+            final_loss_val = 0
 
-                result['body_pose'] = body_pose.detach().cpu().numpy()
-            result['final_loss_val'] = final_loss_val
-            result['loss_dict'] = global_vars.cur_loss_dict
-            result['betanet_weight'] = global_vars.cur_weight
-            result['betanet_height'] = global_vars.cur_height
-            result['gt_joints'] = gt_joints.detach().cpu().numpy()
-            result['max_joint'] = global_vars.cur_max_joint
+            # for or_idx, orient in enumerate(orientations):
+            or_idx = 0
+            while or_idx < len(orientations):
+                global_vars.cur_orientation = or_idx
+                orient = orientations[or_idx]
+                print('Trying orientation', or_idx, 'of', len(orientations))
+                opt_start = time.time()
+                or_idx += 1
 
-            results.append(result)
+                new_params = defaultdict(transl=body_transl,
+                                         global_orient=orient,
+                                         body_pose=body_mean_pose)
+                body_model.reset_params(**new_params)
+                if use_vposer:
+                    with torch.no_grad():
+                        pose_embedding.fill_(0)
+                        pose_embedding += torch.tensor(mean_body, dtype=dtype, device=device)
 
-        for idx, res_folder in enumerate(result_fn):    # Iterate over batch
-            pkl_data = {}
-            min_loss = np.inf
-            all_results = []
-            for result in results:  # Iterate over orientations
-                sel_res = misc_utils.get_data_from_batched_dict(result, idx, len(result_fn))
-                all_results.append(sel_res)
+                for opt_idx, curr_weights in enumerate(opt_weights):
+                    global_vars.cur_opt_stage = opt_idx
 
-                cost = sel_res['loss_dict']['total'] + sel_res['loss_dict']['pprior'] * 20  # Patrick: Magic weight to make it hate bad poses
-                if cost < min_loss:
-                    min_loss = cost
-                    pkl_data.update(sel_res)
+                    if opt_idx not in trans_opt_stages:
+                        body_model.transl.requires_grad = False
+                    else:
+                        body_model.transl.requires_grad = True
+                    body_params = list(body_model.parameters())
 
-            pkl_data['all_results'] = all_results
+                    final_params = list(
+                        filter(lambda x: x.requires_grad, body_params))
 
-            with open(res_folder, 'wb') as result_file:
-                pickle.dump(pkl_data, result_file, protocol=2)
+                    if use_vposer:
+                        final_params.append(pose_embedding)
 
-            img_s = img[idx, :].detach().cpu().numpy()
-            img_s = pil_img.fromarray((img_s * 255).astype(np.uint8))
-            img_s.save(out_img_fn[idx])
+                    body_optimizer, body_create_graph = optim_factory.create_optimizer(
+                        final_params,
+                        **kwargs)
+                    body_optimizer.zero_grad()
+
+                    curr_weights['bending_prior_weight'] = (
+                        3.17 * curr_weights['body_pose_weight'])
+                    if use_hands:
+                        joint_weights[:, 25:76] = curr_weights['hand_weight']
+                    if use_face:
+                        joint_weights[:, 76:] = curr_weights['face_weight']
+                    loss.reset_loss_weights(curr_weights)
+
+                    closure = monitor.create_fitting_closure(
+                        body_optimizer, body_model,
+                        camera=camera, gt_joints=gt_joints,
+                        joints_conf=joints_conf,
+                        joint_weights=joint_weights,
+                        loss=loss, create_graph=body_create_graph,
+                        use_vposer=use_vposer, vposer=vposer,
+                        pose_embedding=pose_embedding,
+                        scan_tensor=scan_tensor,
+                        scene_v=scene_v, scene_vn=scene_vn, scene_f=scene_f,ftov=ftov,
+                        return_verts=True, return_full_pose=True)
+
+                    if interactive:
+                        if use_cuda and torch.cuda.is_available():
+                            torch.cuda.synchronize()
+                        stage_start = time.time()
+                    final_loss_val = monitor.run_fitting(
+                        body_optimizer,
+                        closure, final_params,
+                        body_model,
+                        pose_embedding=pose_embedding, vposer=vposer,
+                        use_vposer=use_vposer)
+
+                    # print('Final loss val', final_loss_val)
+                    # if final_loss_val is None or math.isnan(final_loss_val) or math.isnan(global_vars.cur_loss_dict['total']):
+                    #     break
+
+                    if interactive:
+                        if use_cuda and torch.cuda.is_available():
+                            torch.cuda.synchronize()
+                        elapsed = time.time() - stage_start
+                        if interactive:
+                            tqdm.write('Stage {:03d} done after {:.4f} seconds'.format(
+                                opt_idx, elapsed))
+
+                # if final_loss_val is None or math.isnan(final_loss_val) or math.isnan(global_vars.cur_loss_dict['total']):
+                #     print('Optimization FAILURE, retrying')
+                #     orientations.append(orientations[or_idx-1] * 0.9)
+                #     continue
+
+                if interactive:
+                    if use_cuda and torch.cuda.is_available():
+                        torch.cuda.synchronize()
+                    elapsed = time.time() - opt_start
+                    tqdm.write('Body fitting Orientation {} done after {:.4f} seconds'.format(or_idx, elapsed))
+                    tqdm.write('Body final loss val = {:.5f}'.format(final_loss_val))
+
+                # Get the result of the fitting process
+                # Store in it the errors list in order to compare multiple
+                # orientations, if they exist
+                result = {'camera_' + str(key): val.detach().cpu().numpy()
+                          for key, val in camera.named_parameters()}
+
+                result['camera_focal_length_x'] = camera.focal_length_x.detach().cpu().numpy()
+                result['camera_focal_length_y'] = camera.focal_length_y.detach().cpu().numpy()
+                result['camera_center'] = camera.center.detach().cpu().numpy()
+
+                result.update({key: val.detach().cpu().numpy()
+                               for key, val in body_model.named_parameters()})
+                if use_vposer:
+                    result['pose_embedding'] = pose_embedding.detach().cpu().numpy()
+                    body_pose = vposer.decode(pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
+
+                    if "smplx.body_models.SMPL'" in str(type(body_model)):
+                        wrist_pose = torch.zeros([body_pose.shape[0], 6], dtype=body_pose.dtype, device=body_pose.device)
+                        body_pose = torch.cat([body_pose, wrist_pose], dim=1)
+
+                    result['body_pose'] = body_pose.detach().cpu().numpy()
+                result['final_loss_val'] = final_loss_val
+                result['loss_dict'] = global_vars.cur_loss_dict
+                result['betanet_weight'] = global_vars.cur_weight
+                result['betanet_height'] = global_vars.cur_height
+                result['gt_joints'] = gt_joints.detach().cpu().numpy()
+                result['max_joint'] = global_vars.cur_max_joint
+
+                results.append(result)
+
+    for idx, res_folder in enumerate(result_fn):    # Iterate over batch
+        pkl_data = {}
+        min_loss = np.inf
+        all_results = []
+        for result in results:  # Iterate over orientations
+            sel_res = misc_utils.get_data_from_batched_dict(result, idx, len(result_fn))
+            all_results.append(sel_res)
+
+            cost = sel_res['loss_dict']['total'] + sel_res['loss_dict']['pprior'] * 20  # Patrick: Magic weight to make it hate bad poses
+            if cost < min_loss:
+                min_loss = cost
+                pkl_data.update(sel_res)
+
+        pkl_data['all_results'] = all_results
+
+        with open(res_folder, 'wb') as result_file:
+            pickle.dump(pkl_data, result_file, protocol=2)
+
+        img_s = img[idx, :].detach().cpu().numpy()
+        img_s = pil_img.fromarray((img_s * 255).astype(np.uint8))
+        img_s.save(out_img_fn[idx])
 
     # if save_meshes or visualize:
     #     # Patrick: This doesn't take the best result

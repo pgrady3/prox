@@ -31,7 +31,7 @@ def get_all_smpl(pkl_data, json_data):
     trans = np.array([4, 0, 0])
 
     for i, result in enumerate(pkl_data['all_results']):
-        t = trans + [0, i * 3, 0]
+        t = trans + [(i // 2) * 3, (i % 2) * 2.2, 0]
         betas = torch.Tensor(result['betas']).unsqueeze(0)
         pose = torch.Tensor(result['body_pose']).unsqueeze(0)
         transl = torch.Tensor(result['transl']).unsqueeze(0)
@@ -47,7 +47,12 @@ def get_all_smpl(pkl_data, json_data):
         smpl_o3d.compute_vertex_normals()
         smpl_o3d.translate(t)
 
-        for idx, key in enumerate(result['loss_dict'].keys()):
+        sub_loss_dict = dict(result['loss_dict'])
+        sub_loss_dict.pop('batch_idx', None)
+        sub_loss_dict.pop('contact', None)
+        sub_loss_dict.pop('angle_prior', None)
+
+        for idx, key in enumerate(sub_loss_dict.keys()):
             lbl = '{} {:.2f}'.format(key, float(result['loss_dict'][key]))
             all_meshes.append(text_3d(lbl, t + [1, idx * 0.2 - 1, 2], direction=(0.01, 0, -1), degree=-90, font_size=150, density=0.2))
 
@@ -114,7 +119,7 @@ def get_smpl(pkl_data, json_data):
         smpl_marker = get_o3d_sphere(color=color, pos=smpl_joints[smpl_to_openpose('smpl')[i], :], radius=0.07)
         all_markers.append(smpl_marker)
 
-        z_depth = smpl_joints[smpl_to_openpose('smpl')[i], 2] - 0.15
+        z_depth = smpl_joints[smpl_to_openpose('smpl')[i], 2] - 0.20
         gt_pos_3d = camera.inverse_camera_tform(torch.tensor(pkl_data['gt_joints']).unsqueeze(0), z_depth).detach().squeeze(0).cpu().numpy()
 
         pred_marker = get_o3d_sphere(color=color, pos=gt_pos_3d[i, :], radius=0.03)
