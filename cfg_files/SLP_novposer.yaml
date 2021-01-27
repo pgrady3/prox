@@ -22,12 +22,14 @@ side_view_thsh: 55 # If shoulders are narrower than this, try both orientations
 
 use_vposer: False
 vposer_ckpt: "models/vposer_v1_0/"
-part_segm_fn: "models/smplx_parts_segm.pkl"
+#part_segm_fn: "models/smplx_parts_segm.pkl"
+part_segm_fn: "models/smpl_segmentation.pkl"
 
 height_w: 50
 weight_w: 100
 
-batch_size: 24 # We can do all 45 poses at once?
+#batch_size: 100
+batch_size: 24
 optim_type: 'adam'
 #ftol: 1e-12
 ftol: 0
@@ -182,3 +184,5 @@ coll_loss_weights:
     - 0.0
     - 0.1
     - 1.0
+#    - 0.0
+#    - 0.0

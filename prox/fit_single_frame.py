@@ -51,7 +51,19 @@ import global_vars
 import math
 import joint_limits
 import misc_utils
-
+from pytorch3d.renderer import (
+    look_at_view_transform,
+    FoVPerspectiveCameras,
+    PointLights,
+    DirectionalLights,
+    Materials,
+    RasterizationSettings,
+    MeshRenderer,
+    MeshRasterizer,
+    SoftPhongShader,
+    TexturesUV,
+    TexturesVertex
+)
 
 def fit_single_frame(img,
                      keypoints,
@@ -447,6 +459,19 @@ def fit_single_frame(img,
     head_mask = np.in1d(np.arange(N), head_indx)
     body_mask = np.in1d(np.arange(N), body_indx)
 
+    # Patrick: Pytorch3D renderer to determine which vertices are visible during optimization
+    py3d_objs = dict()
+    py3d_camera = FoVPerspectiveCameras(device=device)
+    py3d_raster_settings = RasterizationSettings(image_size=256, blur_radius=0.0, faces_per_pixel=1)
+    py3d_objs['rasterizer'] = MeshRasterizer(cameras=py3d_camera, raster_settings=py3d_raster_settings)
+
+    py3d_lights = PointLights(device=device, location=[[0.0, 0.0, -3.0]])
+    py3d_objs['renderer'] = None
+    # py3d_objs['renderer'] = MeshRenderer(
+    #         rasterizer=py3d_objs['rasterizer'],
+    #         shader=SoftPhongShader(device=device, cameras=py3d_camera, lights=py3d_lights)
+    #     )
+
     # The indices of the joints used for the initialization of the camera
     init_joints_idxs = torch.tensor(init_joints_idxs, device=device)
 
@@ -520,6 +545,7 @@ def fit_single_frame(img,
                                gender=gender,
                                weight_w=weight_w,
                                height_w=height_w,
+                               py3d_objs=py3d_objs,
                                **kwargs)
     loss = loss.to(device=device)
 

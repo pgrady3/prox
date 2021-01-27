@@ -87,6 +87,7 @@ def get_smpl(pkl_data, json_data):
     print('Est weight from volume', smpl_trimesh.volume * 1.03 * 1000)
     # print('Pose embedding', pkl_data['pose_embedding'])
     # print('Body pose', np.array2string(pkl_data['body_pose'], separator=', '))
+    # print('SMPL vertex zero', smpl_vertices[0, :])
 
     smpl_o3d = o3d.TriangleMesh()
     smpl_o3d.triangles = o3d.Vector3iVector(model.faces)
@@ -118,11 +119,13 @@ def get_smpl(pkl_data, json_data):
         color = cm.jet(cmap_val)[:3]
 
         pos = smpl_joints[smpl_to_openpose('smpl')[i], :]
+        rad = 0.07
         if i == 0:
             ear_joints = smpl_to_openpose('smpl')[17:19]    # Get left and right ear
             pos = smpl_joints[ear_joints, :].mean(0)
+            rad = 0.10
 
-        smpl_marker = get_o3d_sphere(color=color, pos=pos, radius=0.07)
+        smpl_marker = get_o3d_sphere(color=color, pos=pos, radius=rad)
         all_markers.append(smpl_marker)
 
         z_depth = smpl_joints[smpl_to_openpose('smpl')[i], 2] - 0.20
@@ -134,14 +137,17 @@ def get_smpl(pkl_data, json_data):
     return smpl_vertices, model.faces, smpl_o3d, smpl_o3d_2, all_markers
 
 
-def get_depth(idx):
+def get_depth(idx, sample):
     depth, jt, bb = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw', if_sq_bb=False)
     bb = bb.round().astype(int)
     bb += np.array([-25, -5, 50, 10])    # Patrick, expand "bounding box", since it often cuts off parts of the body
 
+    bb = None
     pointcloud = ut.get_ptc(depth, SLP_dataset.f_d, SLP_dataset.c_d, bb) / 1000.0
 
-    valid_pcd = np.logical_and(pointcloud[:, 2] > 1.5, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
+    # np.save('pointcloud_subj{}_sample{}.npy'.format(sample[0], sample[2]), pointcloud)
+
+    valid_pcd = np.logical_and(pointcloud[:, 2] > 1.55, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
     pointcloud = pointcloud[valid_pcd, :]
 
     pcd = o3d.geometry.PointCloud()
@@ -191,7 +197,7 @@ def view_fit(sample, idx):
         json_data = json.load(keypoint_file)
 
     smpl_vertices, smpl_faces, smpl_mesh, smpl_mesh_calc, joint_markers = get_smpl(pkl_np, json_data)
-    pcd = get_depth(idx)
+    pcd = get_depth(idx, sample)
     rgbd_ptc = get_rgb(sample)
 
     vis = o3d.Visualizer()

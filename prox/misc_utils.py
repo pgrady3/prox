@@ -30,6 +30,39 @@ import pyrender
 from pyquaternion import Quaternion
 from PIL import Image, ImageFont, ImageDraw
 import open3d as o3d
+import matplotlib.pyplot as plt
+from pytorch3d.ops import packed_to_padded
+
+
+def get_visible_verts(body_mesh, rasterizer, renderer=None):
+    with torch.no_grad():   # Turn off gradients, since we don't really want to differentiate through the renderer, sounds too hard
+        # if renderer is not None:
+        #     images = renderer(body_mesh).detach()
+        #     plt.figure(figsize=(10, 10))
+        #     plt.imshow(images[0, ..., :3].cpu().numpy())
+        #     plt.grid("off")
+        #     plt.axis("off")
+
+        # Calculate which vertices are visible to camera, much less convex
+        fragments = rasterizer(body_mesh)  # Render using py3d
+        pix_to_face = fragments.pix_to_face  # pix_to_face is of shape (N, H, W, 1)
+
+        packed_faces = body_mesh.faces_packed()  # (F, 3) where F is the total number of faces across all the meshes in the batch
+        packed_verts = body_mesh.verts_packed()  # (V, 3) where V is the total number of verts across all the meshes in the batch
+        vertex_visibility_map = torch.zeros(packed_verts.shape[0], dtype=torch.bool, device=body_mesh.device)  # (V,)
+        visible_faces = pix_to_face.unique()  # Indices of unique visible faces, (num_visible_faces )
+
+        # Get Indices of unique visible verts using the vertex indices in the faces
+        visible_verts_idx = packed_faces[visible_faces]  # (num_visible_faces,  3)
+        unique_visible_verts_idx = torch.unique(visible_verts_idx)  # (num_visible_verts, )
+
+        # Update visibility indicator to 1 for all visible vertices
+        vertex_visibility_map[unique_visible_verts_idx] = True
+
+        num_verts_mesh = body_mesh.num_verts_per_mesh()
+        vertex_visibility_padded = vertex_visibility_map.view(num_verts_mesh.shape[0], num_verts_mesh[0])   # Reshape, not compatible with different mesh sizes
+
+    return vertex_visibility_padded
 
 
 def get_data_from_batched_dict(in_dict, batch_idx, batch_n):

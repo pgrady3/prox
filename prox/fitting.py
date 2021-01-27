@@ -28,6 +28,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch3d
 from pytorch3d.ops import knn_points
+from pytorch3d.renderer import (
+    FoVPerspectiveCameras, look_at_view_transform, look_at_rotation,
+    RasterizationSettings, MeshRenderer, MeshRasterizer, BlendParams,
+    SoftSilhouetteShader, HardPhongShader, PointLights, TexturesVertex,
+)
 
 from psbody.mesh.visibility import visibility_compute
 from psbody.mesh import Mesh
@@ -416,9 +421,12 @@ class SMPLifyLoss(nn.Module):
                  gender='male',
                  weight_w=0,
                  height_w=0,
+                 py3d_objs=None,
                  **kwargs):
 
         super(SMPLifyLoss, self).__init__()
+
+        self.py3d_objs = py3d_objs
 
         self.use_joints_conf = use_joints_conf
         self.angle_prior = angle_prior
@@ -646,12 +654,25 @@ class SMPLifyLoss(nn.Module):
 
             in_mesh_verts = body_model_output.vertices
             in_mesh_faces = body_model_faces.unsqueeze(0).repeat(batch_size, 1, 1)
-            body_mesh = pytorch3d.structures.Meshes(verts=in_mesh_verts, faces=in_mesh_faces)
-            mesh_normals = body_mesh.verts_normals_padded()
+
+            # verts_rgb = torch.ones_like(in_mesh_verts)  # (1, V, 3)
+            # textures = TexturesVertex(verts_features=verts_rgb)
+            body_mesh = pytorch3d.structures.Meshes(verts=in_mesh_verts, faces=in_mesh_faces) #, textures=textures)
             mesh_verts = body_mesh.verts_padded()
-            camera_pos = torch.tensor([0.0, 0.0, 0.0], device=mesh_verts.device)
-            vec_mesh_to_cam = camera_pos - mesh_verts
-            towards_camera = torch.sum(mesh_normals * vec_mesh_to_cam, dim=2) > 0
+
+            if True:
+                # We could calculate this every few iterations, not every single one
+                vertex_visibility_map = utils.get_visible_verts(body_mesh, self.py3d_objs['rasterizer'], self.py3d_objs['renderer'])
+                # print('Percentage viewable by cam', vertex_visibility_map.float().mean())
+                towards_camera = vertex_visibility_map
+            else:
+                # Calculate which normals are towards camera, more convex
+                mesh_normals = body_mesh.verts_normals_padded()
+                camera_pos = torch.tensor([0.0, 0.0, 0.0], device=mesh_verts.device)
+                vec_mesh_to_cam = camera_pos - mesh_verts
+                towards_camera = torch.sum(mesh_normals * vec_mesh_to_cam, dim=2) > 0
+                # print('Percentage towards cam', towards_camera.float().mean())
+
             num_mesh_verts_towards_camera = torch.sum(towards_camera, dim=1)
 
             mesh_verts_towards_camera = torch.zeros([batch_size, num_mesh_verts_towards_camera.max(), 3], device=mesh_verts.device)
