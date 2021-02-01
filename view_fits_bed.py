@@ -24,45 +24,6 @@ from patrick_util import *
 SLP_PATH = '/home/patrick/datasets/SLP/danaLab'
 FITS_PATH = '/home/patrick/bed/prox/slp_fits'
 
-
-def get_all_smpl(pkl_data, json_data):
-    gender = json_data['people'][0]['gender_gt']
-    all_meshes = []
-
-    trans = np.array([4, 0, 0])
-
-    for i, result in enumerate(pkl_data['all_results']):
-        t = trans + [(i // 2) * 3, (i % 2) * 2.2, 0]
-        betas = torch.Tensor(result['betas']).unsqueeze(0)
-        pose = torch.Tensor(result['body_pose']).unsqueeze(0)
-        transl = torch.Tensor(result['transl']).unsqueeze(0)
-        global_orient = torch.Tensor(result['global_orient']).unsqueeze(0)
-
-        model = smplx.create('models', model_type='smpl', gender=gender)
-        output = model(betas=betas, body_pose=pose, transl=transl, global_orient=global_orient, return_verts=True)
-        smpl_vertices = output.vertices.detach().cpu().numpy().squeeze()
-
-        smpl_o3d = o3d.geometry.TriangleMesh()
-        smpl_o3d.triangles = o3d.utility.Vector3iVector(model.faces)
-        smpl_o3d.vertices = o3d.utility.Vector3dVector(smpl_vertices)
-        smpl_o3d.compute_vertex_normals()
-
-        smpl_o3d.translate(t)
-
-        sub_loss_dict = dict(result['loss_dict'])
-        sub_loss_dict.pop('batch_idx', None)
-        sub_loss_dict.pop('contact', None)
-        sub_loss_dict.pop('angle_prior', None)
-
-        for idx, key in enumerate(sub_loss_dict.keys()):
-            lbl = '{} {:.2f}'.format(key, float(result['loss_dict'][key]))
-            all_meshes.append(text_3d(lbl, t + [1, idx * 0.2 - 1, 2], direction=(0.01, 0, -1), degree=-90, font_size=150, density=0.2))
-
-        all_meshes.append(smpl_o3d)
-
-    return all_meshes
-
-
 def get_smpl(pkl_data, json_data):
     gender = json_data['people'][0]['gender_gt']
     print('Target height {}, weight {}'.format(json_data['people'][0]['height'], json_data['people'][0]['weight']))
@@ -139,22 +100,31 @@ def get_smpl(pkl_data, json_data):
     return smpl_vertices, model.faces, smpl_o3d, smpl_o3d_2, all_markers
 
 
+def apply_homography(points, h):
+    # Apply 3x3 homography matrix to points
+    points_h = np.concatenate((points, np.ones(points.shape[0])))
+    tform_h = np.matmul(h, points_h.T).T
+    tform_h /= tform_h[:, 2]
+
+    return tform_h[:, :2]
+
+
 def get_depth(idx, sample):
+    # arr_IR2depth = SLP_dataset.get_array_A2B(idx=idx, modA='IR', modB='depthRaw')
+    # arr_PM2depth = SLP_dataset.get_array_A2B(idx=idx, modA='PM', modB='depthRaw')
+    pressure_to_depth_homography = SLP_dataset.get_PTr_A2B(idx=idx, modA='PM', modB='depthRaw')     # Get homography matrix from A to B
+    depth_to_depth_homography = SLP_dataset.get_PTr_A2B(idx=idx, modA='depthRaw', modB='depth')     # Get homography matrix from A to B
+
     depth, jt, bb = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw', if_sq_bb=False)
     bb = bb.round().astype(int)
     bb += np.array([-25, -5, 50, 10])    # Patrick, expand "bounding box", since it often cuts off parts of the body
-
-    # bb = None
     pointcloud = ut.get_ptc(depth, SLP_dataset.f_d, SLP_dataset.c_d, bb) / 1000.0
-
-    # np.save('pointcloud_subj{}_sample{}.npy'.format(sample[0], sample[2]), pointcloud)
 
     valid_pcd = np.logical_and(pointcloud[:, 2] > 1.55, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
     pointcloud = pointcloud[valid_pcd, :]
-
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pointcloud)
-    return pcd
+    ptc_depth = o3d.geometry.PointCloud()
+    ptc_depth.points = o3d.utility.Vector3dVector(pointcloud)
+    return ptc_depth
 
 
 def get_rgb(sample):
@@ -166,13 +136,23 @@ def get_rgb(sample):
     depth_image = o3d.geometry.Image(depth_raw)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_image, depth_image, depth_scale=1)
 
-    intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.Kinect2ColorCameraDefault)
+    f_r = [902.6, 877.4]    # From SLP dataset README
+    c_r = [278.4, 525.1]
+
+    intrinsic = o3d.camera.PinholeCameraIntrinsic(width=rgb_raw.shape[1], height=rgb_raw.shape[0],
+                                                  fx=f_r[0], fy=f_r[1], cx=c_r[0], cy=c_r[1])
+
     rgbd_ptc = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
+
+    # intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.Kinect2ColorCameraDefault)
 
     return rgbd_ptc
 
 
 def view_fit(sample, idx):
+    # if sample[0] < 4 or sample[2] < 43:
+    #     return
+
     pkl_path = os.path.join(FITS_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'results', 'image_{:06d}'.format(sample[2]), '000.pkl')
     if not os.path.exists(pkl_path):
         return
@@ -199,11 +179,6 @@ def view_fit(sample, idx):
 
     for j in joint_markers:
         vis.add_geometry(j)
-
-    all_smpl = get_all_smpl(pkl_np, json_data)
-    for o in all_smpl:
-        vis.add_geometry(o)
-
 
     set_camera_extrinsic(vis, np.eye(4))
     vis.run()

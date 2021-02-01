@@ -12,5 +12,5 @@ tqdm
 pyrender>=0.1.23
 trimesh>=2.37.6
 scipy
-open3d-python==0.7.0.0
+open3d
 matplotlib
