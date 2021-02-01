@@ -44,6 +44,7 @@ import misc_utils as utils
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import global_vars
+import patrick_util
 
 @torch.no_grad()
 def guess_init(model,
@@ -146,18 +147,18 @@ class FittingMonitor(object):
         self.steps = 0
         if self.visualize:
             if self.viz_mode == 'o3d':
-                self.vis_o3d = o3d.Visualizer()
+                self.vis_o3d = o3d.visualization.Visualizer()
                 self.vis_o3d.create_window()
-                self.body_o3d = o3d.TriangleMesh()
-                self.scan = o3d.PointCloud()
-                self.lbl_stage = o3d.PointCloud()
+                self.body_o3d = o3d.geometry.TriangleMesh()
+                self.scan = o3d.geometry.PointCloud()
+                self.lbl_stage = o3d.geometry.PointCloud()
 
                 self.joints_opt = []
                 self.joints_gt = []
                 for i in range(25):
                     color = cm.jet(i / 25.0)[:3]
-                    self.joints_opt.append(self.get_o3d_sphere(color=color))
-                    self.joints_gt.append(self.get_o3d_sphere(color=color, radius=0.03))
+                    self.joints_opt.append(patrick_util.get_o3d_sphere(color=color))
+                    self.joints_gt.append(patrick_util.get_o3d_sphere(color=color, radius=0.03))
             else:
                 self.mv = MeshViewer(body_color=self.body_color)
         return self
@@ -168,16 +169,6 @@ class FittingMonitor(object):
                 self.vis_o3d.close()
             else:
                 self.mv.close_viewer()
-
-    def get_o3d_sphere(self, color=[0.3, 1.0, 0.3], pos=[0, 0, 0], radius=0.06):
-        mesh_sphere = o3d.geometry.create_mesh_sphere(radius=radius, resolution=5)
-        mesh_sphere.compute_vertex_normals()
-        mesh_sphere.paint_uniform_color(color)
-        mean = np.asarray(mesh_sphere.vertices).mean(axis=0)
-        diff = np.asarray(pos) - mean
-        # print(diff, type(diff))
-        mesh_sphere.translate(diff)
-        return mesh_sphere
 
     def set_colors(self, vertex_color):
         batch_size = self.colors.shape[0]
@@ -295,10 +286,10 @@ class FittingMonitor(object):
 
                 if self.steps == 0 and self.viz_mode == 'o3d':
 
-                    self.body_o3d.vertices = o3d.Vector3dVector(vertices)
-                    self.body_o3d.triangles = o3d.Vector3iVector(body_model.faces)
-                    self.body_o3d.vertex_normals = o3d.Vector3dVector([])
-                    self.body_o3d.triangle_normals = o3d.Vector3dVector([])
+                    self.body_o3d.vertices = o3d.utility.Vector3dVector(vertices)
+                    self.body_o3d.triangles = o3d.utility.Vector3iVector(body_model.faces)
+                    self.body_o3d.vertex_normals = o3d.utility.Vector3dVector([])
+                    self.body_o3d.triangle_normals = o3d.utility.Vector3dVector([])
                     self.body_o3d.compute_vertex_normals()
                     self.vis_o3d.add_geometry(self.body_o3d)
 
@@ -316,13 +307,13 @@ class FittingMonitor(object):
 
                     # Visualize camera
                     camera_origin = camera.translation[0, :].detach().cpu().numpy()
-                    self.vis_o3d.add_geometry(self.get_o3d_sphere([1.0, 0.0, 0.0], pos=camera_origin))
+                    self.vis_o3d.add_geometry(patrick_util.get_o3d_sphere([1.0, 0.0, 0.0], pos=camera_origin))
 
                     if scan_tensor is not None:
                         scan_batch = scan_tensor.points_list()[0]
-                        self.scan.points = o3d.Vector3dVector(scan_batch.detach().cpu().numpy())
+                        self.scan.points = o3d.utility.Vector3dVector(scan_batch.detach().cpu().numpy())
                         N = scan_batch.shape[0]
-                        self.scan.colors = o3d.Vector3dVector(np.tile([1.00, 0.75, 0.80], [N, 1]))
+                        self.scan.colors = o3d.utility.Vector3dVector(np.tile([1.00, 0.75, 0.80], [N, 1]))
                         self.vis_o3d.add_geometry(self.scan)
 
                     lbl = 'Subj {} Sample {}'.format(global_vars.cur_participant[0], global_vars.cur_sample[0])
@@ -330,32 +321,36 @@ class FittingMonitor(object):
 
                     self.vis_o3d.add_geometry(self.lbl_stage)
 
-                    self.vis_o3d.update_geometry()
+                    camera_extrinsic = np.eye(4)
+                    camera_extrinsic[2, 3] = 1  # Offset the camera back to get wider FOV
+                    patrick_util.set_camera_extrinsic(self.vis_o3d, camera_extrinsic)
+
                     self.vis_o3d.poll_events()
                     self.vis_o3d.update_renderer()
                 elif self.steps % self.summary_steps == 0:
                     if self.viz_mode == 'o3d':
-                        self.body_o3d.vertices = o3d.Vector3dVector(vertices)
-                        self.body_o3d.triangles = o3d.Vector3iVector(body_model.faces)
-                        self.body_o3d.vertex_normals = o3d.Vector3dVector([])
-                        self.body_o3d.triangle_normals = o3d.Vector3dVector([])
+                        self.body_o3d.vertices = o3d.utility.Vector3dVector(vertices)
+                        self.body_o3d.triangles = o3d.utility.Vector3iVector(body_model.faces)
+                        self.body_o3d.vertex_normals = o3d.utility.Vector3dVector([])
+                        self.body_o3d.triangle_normals = o3d.utility.Vector3dVector([])
                         self.body_o3d.compute_vertex_normals()
+                        self.vis_o3d.update_geometry(self.body_o3d)
 
                         lbl2 = 'Orient {} Stage {}'.format(global_vars.cur_orientation, global_vars.cur_opt_stage)
                         lbl2_pcd = utils.text_3d(lbl2, (0, -1.7, 2), direction=(0.01, 0, -1), degree=-90, font_size=200, density=0.15)
                         self.lbl_stage.points = lbl2_pcd.points
+                        self.vis_o3d.update_geometry(self.lbl_stage)
 
                         # Visualize SMPL joints - Patrick
                         for i in range(25):
                             mean = np.asarray(self.joints_opt[i].vertices).mean(axis=0)
                             self.joints_opt[i].translate(joints[i, :] - mean)
+                            self.vis_o3d.update_geometry(self.joints_opt[i])
 
-                        self.vis_o3d.update_geometry()
                         self.vis_o3d.poll_events()
                         self.vis_o3d.update_renderer()
                     else:
-                        self.mv.update_mesh(vertices.squeeze(),
-                                        body_model.faces)
+                        self.mv.update_mesh(vertices.squeeze(), body_model.faces)
             self.steps += 1
 
             return total_loss
@@ -521,6 +516,10 @@ class SMPLifyLoss(nn.Module):
                                  torch.tensor(contact_loss_weight, dtype=dtype))
             self.contact_robustifier = utils.GMoF_unscaled(rho=self.rho_contact)
 
+        self.cur_idx = 0
+        self.visibility_idx = float('-inf')
+        self.visibility_map = None
+
     def reset_loss_weights(self, loss_weight_dict):
             for key in loss_weight_dict:
                 if hasattr(self, key):
@@ -662,9 +661,13 @@ class SMPLifyLoss(nn.Module):
 
             if True:
                 # We could calculate this every few iterations, not every single one
-                vertex_visibility_map = utils.get_visible_verts(body_mesh, self.py3d_objs['rasterizer'], self.py3d_objs['renderer'])
+                if self.cur_idx >= self.visibility_idx + 3:
+                    self.visibility_idx = self.cur_idx
+                    self.visibility_map = utils.get_visible_verts(body_mesh, self.py3d_objs['rasterizer'], self.py3d_objs['renderer'])
+
+                self.cur_idx += 1
                 # print('Percentage viewable by cam', vertex_visibility_map.float().mean())
-                towards_camera = vertex_visibility_map
+                towards_camera = self.visibility_map
             else:
                 # Calculate which normals are towards camera, more convex
                 mesh_normals = body_mesh.verts_normals_padded()
