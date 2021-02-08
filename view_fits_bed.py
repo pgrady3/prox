@@ -127,32 +127,52 @@ def get_depth(idx, sample):
     return ptc_depth
 
 
-def get_rgb(sample):
+def get_rgb(idx, sample):
     # Load RGB image
-    rgb_path = os.path.join(FITS_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'images', 'image_{:06d}'.format(sample[2]), '000', 'output.png')
-    rgb_image = o3d.io.read_image(rgb_path)
-    rgb_raw = np.asarray(rgb_image)
-    depth_raw = np.ones((rgb_raw.shape[0], rgb_raw.shape[1]), dtype=np.float32) * 2.15
+    # rgb_path = os.path.join(SLP_PATH, '{:05d}'.format(sample[0]), 'RGB', sample[1], 'image_{:06d}.png'.format(sample[2]))
+    # rgb_image = o3d.io.read_image(rgb_path)
+    # rgb_raw = np.asarray(rgb_image)
+
+    RGB_to_depth = SLP_dataset.get_array_A2B(idx=idx, modA='RGB', modB='depthRaw')
+
+    depth_raw = np.ones((RGB_to_depth.shape[0], RGB_to_depth.shape[1]), dtype=np.float32) * 2.15
     depth_image = o3d.geometry.Image(depth_raw)
+    rgb_image = o3d.geometry.Image(RGB_to_depth)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_image, depth_image, depth_scale=1)
 
-    f_r = [902.6, 877.4]    # From SLP dataset README
-    c_r = [278.4, 525.1]
+    # f_r = [902.6, 877.4]    # From SLP dataset RGB README
+    # c_r = [278.4, 525.1]
+    f_r = SLP_dataset.f_d
+    c_r = SLP_dataset.c_d
 
-    intrinsic = o3d.camera.PinholeCameraIntrinsic(width=rgb_raw.shape[1], height=rgb_raw.shape[0],
+    intrinsic = o3d.camera.PinholeCameraIntrinsic(width=RGB_to_depth.shape[1], height=RGB_to_depth.shape[0],
                                                   fx=f_r[0], fy=f_r[1], cx=c_r[0], cy=c_r[1])
 
     rgbd_ptc = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
+    return rgbd_ptc
 
-    # intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.Kinect2ColorCameraDefault)
 
+def get_pressure(idx, sample):
+    pressure_to_depth = SLP_dataset.get_array_A2B(idx=idx, modA='PM', modB='depthRaw')
+
+    depth_raw = np.ones((pressure_to_depth.shape[0], pressure_to_depth.shape[1]), dtype=np.float32) * 2.10
+    depth_image = o3d.geometry.Image(depth_raw)
+    pressure_image = o3d.geometry.Image(pressure_to_depth)
+    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(pressure_image, depth_image, depth_scale=1)
+
+    # f_r = [902.6, 877.4]    # From SLP dataset RGB README
+    # c_r = [278.4, 525.1]
+    f_r = SLP_dataset.f_d
+    c_r = SLP_dataset.c_d
+
+    intrinsic = o3d.camera.PinholeCameraIntrinsic(width=pressure_to_depth.shape[1], height=pressure_to_depth.shape[0],
+                                                  fx=f_r[0], fy=f_r[1], cx=c_r[0], cy=c_r[1])
+
+    rgbd_ptc = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
     return rgbd_ptc
 
 
 def view_fit(sample, idx):
-    # if sample[0] < 4 or sample[2] < 43:
-    #     return
-
     pkl_path = os.path.join(FITS_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'results', 'image_{:06d}'.format(sample[2]), '000.pkl')
     if not os.path.exists(pkl_path):
         return
@@ -166,7 +186,8 @@ def view_fit(sample, idx):
 
     smpl_vertices, smpl_faces, smpl_mesh, smpl_mesh_calc, joint_markers = get_smpl(pkl_np, json_data)
     pcd = get_depth(idx, sample)
-    rgbd_ptc = get_rgb(sample)
+    rgbd_ptc = get_rgb(idx, sample)
+    pm_ptc = get_pressure(idx, sample)
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -174,8 +195,13 @@ def view_fit(sample, idx):
     vis.add_geometry(smpl_mesh)
     vis.add_geometry(smpl_mesh_calc)
     vis.add_geometry(rgbd_ptc)
+    vis.add_geometry(pm_ptc)
     lbl = 'Participant {} sample {}'.format(sample[0], sample[2])
     vis.add_geometry(text_3d(lbl, (-0.5, 1.0, 2), direction=(0.01, 0, -1), degree=-90, font_size=150, density=0.2))
+
+    vis.add_geometry(text_3d('.(0,0,1)', (0, 0, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
+    vis.add_geometry(text_3d('.(1,0,1)', (1, 0, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
+    vis.add_geometry(text_3d('.(0,1,1)', (0, 1, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
 
     for j in joint_markers:
         vis.add_geometry(j)

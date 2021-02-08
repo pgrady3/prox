@@ -159,7 +159,7 @@ def get_depth(idx, sample):
 
 def get_rgb(sample):
     # Load RGB image
-    rgb_path = os.path.join(FITS_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'images', 'image_{:06d}'.format(sample[2]), '000', 'output.png')
+    rgb_path = os.path.join(SLP_PATH, '{:05d}'.format(sample[0]), 'RGB', sample[1], 'image_{:06d}.png'.format(sample[2]))
     rgb_image = o3d.io.read_image(rgb_path)
     rgb_raw = np.asarray(rgb_image)
     depth_raw = np.ones((rgb_raw.shape[0], rgb_raw.shape[1]), dtype=np.float32) * 2.15
