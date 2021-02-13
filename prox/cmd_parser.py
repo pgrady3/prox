@@ -397,6 +397,11 @@ def parse_config(argv=None):
                         default=False,
                         help='Share beta values across batch')
 
+    parser.add_argument('--read_raw_ptc',
+                        type=lambda arg: arg.lower() == 'true',
+                        default=False,
+                        help='Read raw npy pointcloud file')
+
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict

@@ -259,8 +259,8 @@ def main(**args):
         img = data['img']
         fn = data['fn']
         keypoints = data['keypoints']
-        depth_im = data['depth_im']
-        mask = data['mask']
+        # depth_im = data['depth_im']
+        # mask = data['mask']
         init_trans = None if data['init_trans'] is None else torch.tensor(data['init_trans'], dtype=dtype).view(-1,3)
         scan = data['scan']
         print('Processing: {}'.format(data['img_path']))
@@ -351,7 +351,8 @@ if __name__ == "__main__":
         all_recordings = glob('slp_tform/recordings/*/')
         all_recordings.sort()
 
-        # all_recordings = all_recordings[14:]  # Start partway through the dataset
+        # print('STARTING PARTWAY')
+        # all_recordings = all_recordings[70:]  # Start partway through the dataset
 
         for recording in all_recordings:
             args['recording_dir'] = recording[:-1]

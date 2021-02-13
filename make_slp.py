@@ -160,6 +160,10 @@ def make_mask(sample, idx, keypoints=None, vis=False):
     dest_filename = os.path.join(dest_color, 'image_{:06d}.png'.format(sample[2]))
     cv2.imwrite(dest_filename, mask_dilate)
 
+    # Save raw pointcloud as numpy array
+    ptc_filename = os.path.join(dest_folder, 'Depth', 'image_{:06d}_raw_ptc.npy'.format(sample[2]))
+    np.save(ptc_filename, inliers_numpy / 1000)     # Save as meters
+
 
 def make_dataset():
     all_samples = SLP_dataset.pthDesc_li

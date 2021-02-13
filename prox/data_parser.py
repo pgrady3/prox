@@ -143,6 +143,7 @@ class OpenPose(Dataset):
                  scale_factor=1,
                  frame_ids=None,
                  init_mode='sk',
+                 read_raw_ptc=False,
                  **kwargs):
         super(OpenPose, self).__init__()
 
@@ -179,6 +180,7 @@ class OpenPose(Dataset):
         self.flip = flip
         self.read_depth = read_depth
         self.read_mask = read_mask
+        self.read_raw_ptc = read_raw_ptc
         self.scale_factor = scale_factor
         self.init_mode = init_mode
         self.mask_on_color = mask_on_color
@@ -261,6 +263,12 @@ class OpenPose(Dataset):
             scan_dict = self.projection.create_scan(mask, depth_im, mask_on_color=self.mask_on_color)
             init_trans = np.mean(scan_dict.get('points'), axis=0)
 
+        if self.read_raw_ptc:
+            raw_points = np.load(os.path.join(self.depth_folder, img_fn + '_raw_ptc.npy'))
+            colors = np.tile([0.9, 0.6, 1.0], [raw_points.shape[0], 1])
+            scan_dict = {'points': raw_points, 'colors': colors}
+            init_trans = np.mean(scan_dict.get('points'), axis=0)
+
         # Visualize pointclouds - Patrick
         # pcd_mine = o3d.geometry.PointCloud()
         # points_mine = ut.get_ptc(depth_im, f=[367.8, 367.8], c=[208.1, 259.7])
@@ -322,7 +330,7 @@ class OpenPose(Dataset):
     def collate_fn(batch):
         out = dict()
         batch_keys = batch[0].keys()
-        skip_keys = ['scan_dict']    # These will be manually collated
+        skip_keys = ['scan_dict', 'depth_im', 'mask']    # These will be manually collated or skipped
 
         # For each not in skip_keys, use default torch collator
         for key in [k for k in batch_keys if k not in skip_keys]:

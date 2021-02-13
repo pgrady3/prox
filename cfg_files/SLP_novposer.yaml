@@ -76,8 +76,9 @@ trans_opt_stages:
     - 5
     - 6
 mask_on_color: False
-read_depth: True
-read_mask: True
+read_depth: False
+read_mask: False
+read_raw_ptc: True
 # Depth
 init_mode: 'scan'   # This picks the mean of the depth image, but since we 'dont have this', lets just try something
 m2s: True
@@ -182,7 +183,7 @@ coll_loss_weights:
     - 0.0
     - 0.0
     - 0.0
-    - 0.1
     - 1.0
+    - 10.0
 #    - 0.0
 #    - 0.0

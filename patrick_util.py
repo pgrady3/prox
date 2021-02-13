@@ -3,6 +3,7 @@ import open3d as o3d
 import sys
 sys.path.append('/home/patrick/bed/SLP-Dataset-and-Code')
 from data.SLP_RD import SLP_RD
+import utils.utils as ut    # SLP utils
 import cv2
 
 
@@ -28,68 +29,62 @@ def set_camera_extrinsic(vis, transform=np.eye(4)):
     ctr.convert_from_pinhole_camera_parameters(cam)
 
 
-def henry_convert_depth_2_pc(slp_dataset, depth_arr):
-    c_d = [208.1, 259.7]  # z/f = x_m/x_p so m or mm doesn't matter
-    f_d = [367.8, 367.8]
+def get_homography_components(h):
+    '''((translationx, translationy), rotation, (scalex, scaley), shear)'''
+    normalised_homography = h / h[2, 2]
 
-    calibrate_depth = True
+    a = normalised_homography[0,0]
+    b = normalised_homography[0,1]
+    c = normalised_homography[0,2]
+    d = normalised_homography[1,0]
+    e = normalised_homography[1,1]
+    f = normalised_homography[1,2]
 
-    if calibrate_depth:
-        depth_Tr = slp_dataset.genPTr_dict(['depth'])['depth'][0] #self.get_PTr_A2B(modA='depth', modB='PM')
-        # print(self.get_PTr_A2B(modA='depth', modB='PM'))
-        depth_Tr[0:2, 0:3] = depth_Tr[0:2, 0:3]/ (192./345.)
+    p = np.sqrt(a*a + b*b)
+    r = (a*e - b*d)/p
+    q = (a*d+b*e)/(a*e - b*d)
 
-        # print('depthTR', depth_Tr)
-        # print(np.matmul(depth_Tr, np.array([self.c_d[0], self.c_d[1], 1.0]).T))
-        cd_modified = np.matmul(depth_Tr, np.array([c_d[0], c_d[1], 1.0]).T)
-        cd_modified = cd_modified/cd_modified[2]
+    translation = (c, f)
+    scale = (p, r)
+    shear = q
+    theta = np.arctan2(b, a)
 
-        depth_arr_mod = cv2.warpPerspective(depth_arr, depth_Tr, tuple([155, 345])).astype(np.int16)  #size of depth arr input is
-        depth_arr_mod[0,0] = 2101
+    return {'trans': translation, 'theta': theta, 'scale': scale, 'shear': shear}
 
-        ptc = slp_dataset.get_ptc(depth_arr_mod, f_d, cd_modified[0:2], None)/1000
-        # ptc = self.get_ptc(depth_arr_mod, self.f_d, self.c_d, None)/1000
 
-    else:
-        ptc = slp_dataset.get_ptc(depth_arr, f_d, c_d, None)/1000
+def apply_homography(points, h):
+    # Apply 3x3 homography matrix to points
+    # THIS IS WRONG, HOMOGRAPHY SPECIFIED YX, NOT XY
+    points_h = np.concatenate((points, np.ones(points.shape[0])))
+    tform_h = np.matmul(h, points_h.T).T
+    tform_h /= tform_h[:, 2]
 
-    filter_pc = False
-    if filter_pc:
-        rot_angle_fixed = np.deg2rad(3.0)
-        # rot_angle_fixed = np.deg2rad(10.0)
-        ptc[:, 0] = (ptc[:, 0])*np.cos(rot_angle_fixed) - (ptc[:, 2])*np.sin(rot_angle_fixed)
-        ptc[:, 2] = (ptc[:, 0])*np.sin(rot_angle_fixed) + (ptc[:, 2])*np.cos(rot_angle_fixed)
+    return tform_h[:, :2]
 
-        rot_angle = np.deg2rad(2.5) #
-        ptc[:, 1] = (ptc[:, 1])*np.cos(rot_angle) - (ptc[:, 2])*np.sin(rot_angle)
-        ptc[:, 2] = (ptc[:, 1])*np.sin(rot_angle) + (ptc[:, 2])*np.cos(rot_angle)
 
-        ptc = ptc[ptc[:, 2] < 2.103]
+def henry_get_depth_homography(slp_dataset, idx):
+    depth_Tr = slp_dataset.get_PTr_A2B(idx=idx, modA='depthRaw', modB='PM')     # Get SLP homography matrix
+    depth_Tr /= depth_Tr[2, 2]  # Make more readable matrix
 
-        ptc[:, 1] = (ptc[:, 1])*np.cos(-rot_angle) - (ptc[:, 2])*np.sin(-rot_angle)
-        ptc[:, 2] = (ptc[:, 1])*np.sin(-rot_angle) + (ptc[:, 2])*np.cos(-rot_angle)
+    # (192, 84) dimensions of pressure mat
+    # (512, 424) dimensions of depth camera
+    depth_Tr[0:2, 0:3] = depth_Tr[0:2, 0:3] / (192./345.)   # Scale matrix to align to PM. Is this a fudge factor? Bed is 345 depth pixels high?
+    # print(get_homography_components(depth_Tr)
+    # with np.printoptions(precision=4, suppress=True):
+    #     print(depth_Tr)
 
-    ptc_first_point = np.array(ptc[0])
+    return depth_Tr
 
-    length_new_pmat = 1.92
-    width_new_pmat = 0.84
 
-    scale_diff_h = (length_new_pmat - 64*0.0286)
-    scale_diff_w = (width_new_pmat - 27*0.0286)
+def henry_convert_depth_2_pc(slp_dataset, depth_arr, idx):
+    depth_homography = henry_get_depth_homography(slp_dataset, idx)
 
-    # this is because we set the first point in the depth image to 2101.
-    ptc[:, 0] -= ptc_first_point[0]
-    ptc[:, 1] -= ptc_first_point[1]
-    ptc[:, 2] -= ptc_first_point[2]
+    depth_arr_mod = cv2.warpPerspective(depth_arr, depth_homography, depth_arr.shape).astype(np.int16)  # Warp, and set output size
+    depth_arr_mod[0, 0] = 2101  # Set magic point to fixed value, used for other stuff?
 
-    ptc[:, 0] -= (scale_diff_w)
-    ptc[:, 1] -= (length_new_pmat - scale_diff_h)
+    cd_modified = np.matmul(depth_homography, np.array([slp_dataset.c_d[0], slp_dataset.c_d[1], 1.0]).T)    # Multiply the center of the depth image by homography
+    cd_modified = cd_modified/cd_modified[2]    # Re-normalize
 
-    ptc = np.concatenate((-ptc[:, 1:2], ptc[:, 0:1], ptc[:, 2:3]), axis = 1)
-
-    if filter_pc:
-        ptc = ptc[ptc[:, 1] > -0.01, :] #cut off points at the edge
-        ptc = ptc[ptc[:, 2] > -0.5, :] #cut off stuff thats way up high
-        ptc = ptc[ptc[:, 2] < 0.01]
+    ptc = ut.get_ptc(depth_arr_mod, slp_dataset.f_d, cd_modified[0:2], None) / 1000.0
 
     return ptc
