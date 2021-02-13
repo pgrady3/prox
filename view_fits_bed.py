@@ -23,13 +23,14 @@ from patrick_util import *
 
 SLP_PATH = '/home/patrick/datasets/SLP/danaLab'
 FITS_PATH = '/home/patrick/bed/prox/slp_fits'
+SLP_TFORM_PATH = '/home/patrick/bed/prox/slp_tform'
+
 
 def get_smpl(pkl_data, json_data):
     gender = json_data['people'][0]['gender_gt']
     print('Target height {}, weight {}'.format(json_data['people'][0]['height'], json_data['people'][0]['weight']))
 
     betas = torch.Tensor(pkl_data['betas']).unsqueeze(0)
-    print('Betas:', pkl_data['betas'])
     pose = torch.Tensor(pkl_data['body_pose']).unsqueeze(0)
     transl = torch.Tensor(pkl_data['transl']).unsqueeze(0)
     global_orient = torch.Tensor(pkl_data['global_orient']).unsqueeze(0)
@@ -48,15 +49,11 @@ def get_smpl(pkl_data, json_data):
 
     smpl_trimesh = trimesh.Trimesh(vertices=np.asarray(smpl_vertices_unposed), faces=model.faces)
     print('Est weight from volume', smpl_trimesh.volume * 1.03 * 1000)
-    # print('Pose embedding', pkl_data['pose_embedding'])
-    # print('Body pose', np.array2string(pkl_data['body_pose'], separator=', '))
-    # print('SMPL vertex zero', smpl_vertices[0, :])
 
     smpl_o3d = o3d.geometry.TriangleMesh()
     smpl_o3d.triangles = o3d.utility.Vector3iVector(model.faces)
     smpl_o3d.vertices = o3d.utility.Vector3dVector(smpl_vertices)
     smpl_o3d.compute_vertex_normals()
-    # smpl_o3d.paint_uniform_color([0.3, 0.3, 0.3])
 
     smpl_o3d_2 = o3d.geometry.TriangleMesh()
     smpl_o3d_2.triangles = o3d.utility.Vector3iVector(model.faces)
@@ -100,25 +97,39 @@ def get_smpl(pkl_data, json_data):
     return smpl_vertices, model.faces, smpl_o3d, smpl_o3d_2, all_markers
 
 
-def apply_homography(points, h):
-    # Apply 3x3 homography matrix to points
-    points_h = np.concatenate((points, np.ones(points.shape[0])))
-    tform_h = np.matmul(h, points_h.T).T
-    tform_h /= tform_h[:, 2]
-
-    return tform_h[:, :2]
-
-
 def get_depth(idx, sample):
-    # arr_IR2depth = SLP_dataset.get_array_A2B(idx=idx, modA='IR', modB='depthRaw')
-    # arr_PM2depth = SLP_dataset.get_array_A2B(idx=idx, modA='PM', modB='depthRaw')
-    pressure_to_depth_homography = SLP_dataset.get_PTr_A2B(idx=idx, modA='PM', modB='depthRaw')     # Get homography matrix from A to B
-    depth_to_depth_homography = SLP_dataset.get_PTr_A2B(idx=idx, modA='depthRaw', modB='depth')     # Get homography matrix from A to B
-
     depth, jt, bb = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw', if_sq_bb=False)
     bb = bb.round().astype(int)
     bb += np.array([-25, -5, 50, 10])    # Patrick, expand "bounding box", since it often cuts off parts of the body
     pointcloud = ut.get_ptc(depth, SLP_dataset.f_d, SLP_dataset.c_d, bb) / 1000.0
+
+    valid_pcd = np.logical_and(pointcloud[:, 2] > 1.55, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
+    pointcloud = pointcloud[valid_pcd, :]
+
+    pointcloud[:, 2] += 0.1
+
+    ptc_depth = o3d.geometry.PointCloud()
+    ptc_depth.points = o3d.utility.Vector3dVector(pointcloud)
+    return ptc_depth
+
+
+def get_depth_saved(idx, sample):
+    depth_path = os.path.join(SLP_TFORM_PATH, 'recordings', '{}_{:05d}'.format(sample[1], sample[0]), 'Depth', 'image_{:06d}_raw_ptc.npy'.format(sample[2]))
+    pointcloud = np.load(depth_path)
+
+    ptc_depth = o3d.geometry.PointCloud()
+    ptc_depth.points = o3d.utility.Vector3dVector(pointcloud)
+    return ptc_depth
+
+
+def get_depth_henry(idx, sample):
+    raw_depth = SLP_dataset.get_array_A2B(idx=idx, modA='depthRaw', modB='depthRaw')
+    pointcloud = henry_convert_depth_2_pc(SLP_dataset, raw_depth, idx)
+
+    # depth, jt, bb = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw', if_sq_bb=False)
+    # bb = bb.round().astype(int)
+    # bb += np.array([-25, -5, 50, 10])    # Patrick, expand "bounding box", since it often cuts off parts of the body
+    # pointcloud = ut.get_ptc(depth, SLP_dataset.f_d, SLP_dataset.c_d, bb) / 1000.0
 
     valid_pcd = np.logical_and(pointcloud[:, 2] > 1.55, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
     pointcloud = pointcloud[valid_pcd, :]
@@ -128,11 +139,6 @@ def get_depth(idx, sample):
 
 
 def get_rgb(idx, sample):
-    # Load RGB image
-    # rgb_path = os.path.join(SLP_PATH, '{:05d}'.format(sample[0]), 'RGB', sample[1], 'image_{:06d}.png'.format(sample[2]))
-    # rgb_image = o3d.io.read_image(rgb_path)
-    # rgb_raw = np.asarray(rgb_image)
-
     RGB_to_depth = SLP_dataset.get_array_A2B(idx=idx, modA='RGB', modB='depthRaw')
 
     depth_raw = np.ones((RGB_to_depth.shape[0], RGB_to_depth.shape[1]), dtype=np.float32) * 2.15
@@ -140,8 +146,6 @@ def get_rgb(idx, sample):
     rgb_image = o3d.geometry.Image(RGB_to_depth)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_image, depth_image, depth_scale=1)
 
-    # f_r = [902.6, 877.4]    # From SLP dataset RGB README
-    # c_r = [278.4, 525.1]
     f_r = SLP_dataset.f_d
     c_r = SLP_dataset.c_d
 
@@ -153,15 +157,14 @@ def get_rgb(idx, sample):
 
 
 def get_pressure(idx, sample):
-    pressure_to_depth = SLP_dataset.get_array_A2B(idx=idx, modA='PM', modB='depthRaw')
+    pressure_to_depth = SLP_dataset.get_array_A2B(idx=idx, modA='PM', modB='depthRaw') / 255.0
+    pressure_to_depth = np.power(pressure_to_depth, 0.2) * 255
+    pressure_image = o3d.geometry.Image(pressure_to_depth.astype(np.uint8))
 
-    depth_raw = np.ones((pressure_to_depth.shape[0], pressure_to_depth.shape[1]), dtype=np.float32) * 2.10
+    depth_raw = np.ones((pressure_to_depth.shape[0], pressure_to_depth.shape[1]), dtype=np.float32) * 2.15
     depth_image = o3d.geometry.Image(depth_raw)
-    pressure_image = o3d.geometry.Image(pressure_to_depth)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(pressure_image, depth_image, depth_scale=1)
 
-    # f_r = [902.6, 877.4]    # From SLP dataset RGB README
-    # c_r = [278.4, 525.1]
     f_r = SLP_dataset.f_d
     c_r = SLP_dataset.c_d
 
@@ -186,22 +189,26 @@ def view_fit(sample, idx):
 
     smpl_vertices, smpl_faces, smpl_mesh, smpl_mesh_calc, joint_markers = get_smpl(pkl_np, json_data)
     pcd = get_depth(idx, sample)
+    pcd_henry = get_depth_henry(idx, sample)
+    pcd_saved = get_depth_saved(idx, sample)
     rgbd_ptc = get_rgb(idx, sample)
     pm_ptc = get_pressure(idx, sample)
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
+    # vis.add_geometry(pcd_henry)
     vis.add_geometry(pcd)
+    vis.add_geometry(pcd_saved)
     vis.add_geometry(smpl_mesh)
     vis.add_geometry(smpl_mesh_calc)
-    vis.add_geometry(rgbd_ptc)
-    vis.add_geometry(pm_ptc)
+    # vis.add_geometry(rgbd_ptc)
+    # vis.add_geometry(pm_ptc)
     lbl = 'Participant {} sample {}'.format(sample[0], sample[2])
     vis.add_geometry(text_3d(lbl, (-0.5, 1.0, 2), direction=(0.01, 0, -1), degree=-90, font_size=150, density=0.2))
 
-    vis.add_geometry(text_3d('.(0,0,1)', (0, 0, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
-    vis.add_geometry(text_3d('.(1,0,1)', (1, 0, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
-    vis.add_geometry(text_3d('.(0,1,1)', (0, 1, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
+    # vis.add_geometry(text_3d('.(0,0,1)', (0, 0, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
+    # vis.add_geometry(text_3d('.(1,0,1)', (1, 0, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
+    # vis.add_geometry(text_3d('.(0,1,1)', (0, 1, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
 
     for j in joint_markers:
         vis.add_geometry(j)
