@@ -52,14 +52,24 @@ def get_homography_components(h):
     return {'trans': translation, 'theta': theta, 'scale': scale, 'shear': shear}
 
 
-def apply_homography(points, h):
+def apply_homography(points, h, yx=True):
     # Apply 3x3 homography matrix to points
-    # THIS IS WRONG, HOMOGRAPHY SPECIFIED YX, NOT XY
-    points_h = np.concatenate((points, np.ones(points.shape[0])))
-    tform_h = np.matmul(h, points_h.T).T
-    tform_h /= tform_h[:, 2]
+    # Note that the homography matrix is parameterized as XY,
+    # but all image coordinates are YX
 
-    return tform_h[:, :2]
+    if yx:
+        points = np.flip(points, 1)
+
+    points_h = np.concatenate((points, np.ones((points.shape[0], 1))), 1)
+    tform_h = np.matmul(h, points_h.T).T
+    tform_h = tform_h / tform_h[:, 2][:, np.newaxis]
+
+    points = tform_h[:, :2]
+
+    if yx:
+        points = np.flip(points, 1)
+
+    return points
 
 
 def henry_get_depth_homography(slp_dataset, idx):
@@ -68,10 +78,7 @@ def henry_get_depth_homography(slp_dataset, idx):
 
     # (192, 84) dimensions of pressure mat
     # (512, 424) dimensions of depth camera
-    depth_Tr[0:2, 0:3] = depth_Tr[0:2, 0:3] / (192./345.)   # Scale matrix to align to PM. Is this a fudge factor? Bed is 345 depth pixels high?
-    # print(get_homography_components(depth_Tr)
-    # with np.printoptions(precision=4, suppress=True):
-    #     print(depth_Tr)
+    depth_Tr[0:2, 0:3] = depth_Tr[0:2, 0:3] / (192./345.)   # Scale matrix to align to PM. 192 is height of pressure map, 345 is heigh of bed in depth pixels
 
     return depth_Tr
 

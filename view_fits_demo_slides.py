@@ -54,6 +54,9 @@ def get_smpl(pkl_data, json_data):
     smpl_o3d.triangles = o3d.utility.Vector3iVector(model.faces)
     smpl_o3d.vertices = o3d.utility.Vector3dVector(smpl_vertices)
     smpl_o3d.compute_vertex_normals()
+    smpl_o3d.paint_uniform_color([1.0, 0.8, 0.65])
+
+    smpl_o3d = smpl_o3d.translate((1.0, 0, 0))
 
     smpl_o3d_2 = o3d.geometry.TriangleMesh()
     smpl_o3d_2.triangles = o3d.utility.Vector3iVector(model.faces)
@@ -98,6 +101,11 @@ def get_smpl(pkl_data, json_data):
 
 
 def get_depth(idx, sample):
+    target = [sample[0], 'cover2', sample[2]]
+    covered_idx = SLP_dataset.pthDesc_li.index(target)
+    idx = covered_idx
+
+
     depth, jt, bb = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw', if_sq_bb=False)
     bb = bb.round().astype(int)
     bb += np.array([-25, -5, 50, 10])    # Patrick, expand "bounding box", since it often cuts off parts of the body
@@ -133,15 +141,28 @@ def get_depth_henry(idx, sample):
 
     valid_pcd = np.logical_and(pointcloud[:, 2] > 1.55, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
     pointcloud = pointcloud[valid_pcd, :]
+
+    # pointcloud[:, 2] += 0.2
+
     ptc_depth = o3d.geometry.PointCloud()
     ptc_depth.points = o3d.utility.Vector3dVector(pointcloud)
     return ptc_depth
 
 
 def get_rgb(idx, sample):
+    # find the covered sample
+    target = [sample[0], 'cover2', sample[2]]
+    covered_idx = SLP_dataset.pthDesc_li.index(target)
+    idx = covered_idx
+
+
     RGB_to_depth = SLP_dataset.get_array_A2B(idx=idx, modA='RGB', modB='depthRaw')
 
     depth_raw = np.ones((RGB_to_depth.shape[0], RGB_to_depth.shape[1]), dtype=np.float32) * 2.15
+
+    rows, cols = np.where(RGB_to_depth[:, :, 0] == 0)
+    depth_raw[rows, cols] = 9
+
     depth_image = o3d.geometry.Image(depth_raw)
     rgb_image = o3d.geometry.Image(RGB_to_depth)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_image, depth_image, depth_scale=1)
@@ -153,6 +174,9 @@ def get_rgb(idx, sample):
                                                   fx=f_r[0], fy=f_r[1], cx=c_r[0], cy=c_r[1])
 
     rgbd_ptc = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
+
+    rgbd_ptc = rgbd_ptc.translate((-1.5, 0, 0))
+
     return rgbd_ptc
 
 
@@ -197,21 +221,17 @@ def view_fit(sample, idx):
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     # vis.add_geometry(pcd_henry)
-    # vis.add_geometry(pcd)
-    vis.add_geometry(pcd_saved)
+    vis.add_geometry(pcd)
+    # vis.add_geometry(pcd_saved)
     vis.add_geometry(smpl_mesh)
-    vis.add_geometry(smpl_mesh_calc)
-    # vis.add_geometry(rgbd_ptc)
+    # vis.add_geometry(smpl_mesh_calc)
+    vis.add_geometry(rgbd_ptc)
     # vis.add_geometry(pm_ptc)
-    lbl = 'Participant {} sample {}'.format(sample[0], sample[2])
-    vis.add_geometry(text_3d(lbl, (-0.5, 1.0, 2), direction=(0.01, 0, -1), degree=-90, font_size=150, density=0.2))
+    # lbl = 'Participant {} sample {}'.format(sample[0], sample[2])
+    # vis.add_geometry(text_3d(lbl, (-0.5, 1.0, 2), direction=(0.01, 0, -1), degree=-90, font_size=150, density=0.2))
 
-    # vis.add_geometry(text_3d('.(0,0,1)', (0, 0, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
-    # vis.add_geometry(text_3d('.(1,0,1)', (1, 0, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
-    # vis.add_geometry(text_3d('.(0,1,1)', (0, 1, 1), direction=(0.01, 0, -1), degree=-90, font_size=50, density=1))
-
-    for j in joint_markers:
-        vis.add_geometry(j)
+    # for j in joint_markers:
+    #     vis.add_geometry(j)
 
     set_camera_extrinsic(vis, np.eye(4))
     vis.run()
@@ -221,6 +241,7 @@ def view_fit(sample, idx):
 
 def make_dataset(skip_sample=0, skip_participant=0):
     all_samples = SLP_dataset.pthDesc_li
+    print(all_samples)
 
     for idx, sample in enumerate(tqdm(all_samples)):
         if sample[0] < skip_participant or sample[2] < skip_sample:
@@ -240,7 +261,7 @@ if __name__ == "__main__":
         SLP_fd = SLP_PATH
         sz_pch = [256, 256]
         fc_depth = 50
-        cov_li = ['uncover']  # give the cover class you want here
+        cov_li = ['uncover', 'cover2']  # give the cover class you want here
     SLP_dataset = SLP_RD(PseudoOpts, phase='all')  # all test result
 
     make_dataset(skip_sample=args.sample, skip_participant=args.participant)
