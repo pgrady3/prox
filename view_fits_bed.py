@@ -106,8 +106,6 @@ def get_depth(idx, sample):
     valid_pcd = np.logical_and(pointcloud[:, 2] > 1.55, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
     pointcloud = pointcloud[valid_pcd, :]
 
-    # pointcloud[:, 2] += 0.1
-
     ptc_depth = o3d.geometry.PointCloud()
     ptc_depth.points = o3d.utility.Vector3dVector(pointcloud)
     return ptc_depth

@@ -68,12 +68,20 @@ def copy_keypoints(sample, idx):
     # Openpose 25 keypoints described here https://github.com/CMU-Perceptual-Computing-Lab/openpose/blob/master/doc/output.md
     # Convert the SLP 14-points to coco25 format
 
-    depth, jtB, bbB = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw')
+    depth, jtB, bbB = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw')    # Keypoints are XY
     phy_vec = SLP_dataset.get_phy(idx=idx)
 
+    # img = depth
+    # for j in range(jtB.shape[0]):
+    #     c = np.rint(jtB[j, :]).astype(np.int)
+    #     img[c[1]:c[1] + 5, c[0]:c[0] + 5] = 0
+    # plt.imshow(img)
+    # plt.show()
+
     if WARP_TO_PM:
-        h_depth_to_pm = henry_get_depth_homography(SLP_dataset, idx)
-        jtB[:, :2] = apply_homography(jtB[:, :2], h_depth_to_pm, True)
+        h = henry_get_depth_homography(SLP_dataset, idx)
+        new_joints = apply_homography(jtB[:, :2], h, False)
+        jtB[:, :2] = new_joints
 
     slp_to_coco25 = [11, 10, 9, 12, 13, 14, 4, 3, 2, 5, 6, 7, 1, 0]     # What I think it should be
     joints_coco25 = np.zeros((25, 3))
@@ -108,6 +116,13 @@ def make_depth(sample, idx, keypoints=None, vis=False):
         pointcloud = henry_convert_depth_2_pc(SLP_dataset, depth, idx)  # This isn't great since there's interpolation
         valid_pcd = np.logical_and(pointcloud[:, 2] > 1.55, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
         pointcloud = pointcloud[valid_pcd, :]
+
+        # img = henry_get_warped_img(depth, henry_get_depth_homography(SLP_dataset, idx))
+        # for j in range(keypoints.shape[0]):
+        #     c = np.rint(keypoints[j, :]).astype(np.int)
+        #     img[c[1]:c[1] + 5, c[0]:c[0] + 5] = 0
+        # plt.imshow(img)
+        # plt.show()
     else:
         pointcloud = ut.get_ptc(depth, SLP_dataset.f_d, SLP_dataset.c_d, bb) / 1000.0
 
@@ -126,7 +141,10 @@ def make_depth(sample, idx, keypoints=None, vis=False):
     pcd2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pointcloud_sel))
 
     if vis:
-        camera = PerspectiveCamera(focal_length_x=367.8, focal_length_y=367.8, center=torch.Tensor([208.1, 259.7]).unsqueeze(0))
+        if WARP_TO_PM:
+            camera = PerspectiveCamera(focal_length_x=367.8, focal_length_y=367.8, center=torch.Tensor(WARPED_DEPTH_TO_PM_CENTER).unsqueeze(0))
+        else:
+            camera = PerspectiveCamera(focal_length_x=367.8, focal_length_y=367.8, center=torch.Tensor([208.1, 259.7]).unsqueeze(0))
         all_joints = []
         joints_3d = camera.inverse_camera_tform(torch.Tensor(keypoints[:, :2]).unsqueeze(0), 2).detach().numpy()
         for i in range(25):

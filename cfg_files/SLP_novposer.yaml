@@ -7,8 +7,10 @@
 # From SLP README.ME Depth
 focal_length_x: 367.8
 focal_length_y: 367.8
-camera_center_x: 208.1
-camera_center_y: 259.7
+#camera_center_x: 208.1
+#camera_center_y: 259.7
+camera_center_x: 38.20736152   # These are from warped depth images
+camera_center_y: 179.87300001
 
 #depth_loss_weight: 0.0
 

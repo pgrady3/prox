@@ -6,6 +6,8 @@ from data.SLP_RD import SLP_RD
 import utils.utils as ut    # SLP utils
 import cv2
 
+WARPED_DEPTH_TO_PM_CENTER = [38.20736152, 179.87300001]
+WARPING_MAGIC_SCALE_FACTOR = (192./345.)   # Scale matrix to align to PM. 192 is height of pressure map, 345 is heigh of bed in depth pixels
 
 def get_o3d_sphere(color=[0.3, 1.0, 0.3], pos=[0, 0, 0], radius=0.06):
     mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius, resolution=5)
@@ -78,16 +80,19 @@ def henry_get_depth_homography(slp_dataset, idx):
 
     # (192, 84) dimensions of pressure mat
     # (512, 424) dimensions of depth camera
-    depth_Tr[0:2, 0:3] = depth_Tr[0:2, 0:3] / (192./345.)   # Scale matrix to align to PM. 192 is height of pressure map, 345 is heigh of bed in depth pixels
-
+    depth_Tr[0:2, 0:3] = depth_Tr[0:2, 0:3] / WARPING_MAGIC_SCALE_FACTOR
     return depth_Tr
+
+
+def henry_get_warped_img(depth_arr, homography):
+    depth_arr_mod = cv2.warpPerspective(depth_arr, homography, depth_arr.shape).astype(np.int16)  # Warp, and set output size
+    depth_arr_mod[0, 0] = 2101  # Set magic point to fixed value, used for other stuff?
+    return depth_arr_mod
 
 
 def henry_convert_depth_2_pc(slp_dataset, depth_arr, idx):
     depth_homography = henry_get_depth_homography(slp_dataset, idx)
-
-    depth_arr_mod = cv2.warpPerspective(depth_arr, depth_homography, depth_arr.shape).astype(np.int16)  # Warp, and set output size
-    depth_arr_mod[0, 0] = 2101  # Set magic point to fixed value, used for other stuff?
+    depth_arr_mod = henry_get_warped_img(depth_arr, depth_homography)
 
     cd_modified = np.matmul(depth_homography, np.array([slp_dataset.c_d[0], slp_dataset.c_d[1], 1.0]).T)    # Multiply the center of the depth image by homography
     cd_modified = cd_modified/cd_modified[2]    # Re-normalize

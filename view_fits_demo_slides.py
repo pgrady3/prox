@@ -54,7 +54,8 @@ def get_smpl(pkl_data, json_data):
     smpl_o3d.triangles = o3d.utility.Vector3iVector(model.faces)
     smpl_o3d.vertices = o3d.utility.Vector3dVector(smpl_vertices)
     smpl_o3d.compute_vertex_normals()
-    smpl_o3d.paint_uniform_color([1.0, 0.8, 0.65])
+    # smpl_o3d.paint_uniform_color([1.0, 0.8, 0.65])  # Tan, skin color
+    smpl_o3d.paint_uniform_color([0.2, 0.3, 1.0])  # Blue, match henry
 
     smpl_o3d = smpl_o3d.translate((1.0, 0, 0))
 
@@ -101,9 +102,9 @@ def get_smpl(pkl_data, json_data):
 
 
 def get_depth(idx, sample):
-    target = [sample[0], 'cover2', sample[2]]
-    covered_idx = SLP_dataset.pthDesc_li.index(target)
-    idx = covered_idx
+    # target = [sample[0], 'cover2', sample[2]]
+    # covered_idx = SLP_dataset.pthDesc_li.index(target)
+    # idx = covered_idx
 
 
     depth, jt, bb = SLP_dataset.get_array_joints(idx_smpl=idx, mod='depthRaw', if_sq_bb=False)
@@ -151,9 +152,9 @@ def get_depth_henry(idx, sample):
 
 def get_rgb(idx, sample):
     # find the covered sample
-    target = [sample[0], 'cover2', sample[2]]
-    covered_idx = SLP_dataset.pthDesc_li.index(target)
-    idx = covered_idx
+    # target = [sample[0], 'cover2', sample[2]]
+    # covered_idx = SLP_dataset.pthDesc_li.index(target)
+    # idx = covered_idx
 
 
     RGB_to_depth = SLP_dataset.get_array_A2B(idx=idx, modA='RGB', modB='depthRaw')
@@ -174,6 +175,9 @@ def get_rgb(idx, sample):
                                                   fx=f_r[0], fy=f_r[1], cx=c_r[0], cy=c_r[1])
 
     rgbd_ptc = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
+    rows, cols = np.where(RGB_to_depth[:, :, 0] != 0)
+    ptc_colors = np.array(RGB_to_depth[rows, cols, :], dtype=np.float) / 255.0
+    rgbd_ptc.colors = o3d.utility.Vector3dVector(ptc_colors)
 
     rgbd_ptc = rgbd_ptc.translate((-1.5, 0, 0))
 
@@ -182,10 +186,15 @@ def get_rgb(idx, sample):
 
 def get_pressure(idx, sample):
     pressure_to_depth = SLP_dataset.get_array_A2B(idx=idx, modA='PM', modB='depthRaw') / 255.0
-    pressure_to_depth = np.power(pressure_to_depth, 0.2) * 255
+    # pressure_to_depth = np.power(pressure_to_depth, 0.2) * 255
     pressure_image = o3d.geometry.Image(pressure_to_depth.astype(np.uint8))
 
     depth_raw = np.ones((pressure_to_depth.shape[0], pressure_to_depth.shape[1]), dtype=np.float32) * 2.15
+
+    rows, cols = np.where(pressure_to_depth != 0)
+    depth_raw += 9
+    depth_raw[rows.min():rows.max(), cols.min():cols.max()] = 2.15
+
     depth_image = o3d.geometry.Image(depth_raw)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(pressure_image, depth_image, depth_scale=1)
 
@@ -196,6 +205,16 @@ def get_pressure(idx, sample):
                                                   fx=f_r[0], fy=f_r[1], cx=c_r[0], cy=c_r[1])
 
     rgbd_ptc = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
+
+    # pressure_to_depth = 1 - pressure_to_depth
+    pressure_to_depth = np.clip(pressure_to_depth * 5.0 * 255.0, 0, 255).astype(np.uint8)
+    ptc_colors = cv2.applyColorMap(pressure_to_depth.astype(np.uint8), cv2.COLORMAP_JET).astype(np.float) / 255.0
+    ptc_colors_sel = ptc_colors[rows.min():rows.max(), cols.min():cols.max()]
+    ptc_colors_sel = ptc_colors_sel[..., ::-1]
+    rgbd_ptc.colors = o3d.utility.Vector3dVector(ptc_colors_sel.reshape(-1, 3))
+
+    rgbd_ptc = rgbd_ptc.translate((2.0, 0, 0))
+
     return rgbd_ptc
 
 
@@ -226,7 +245,7 @@ def view_fit(sample, idx):
     vis.add_geometry(smpl_mesh)
     # vis.add_geometry(smpl_mesh_calc)
     vis.add_geometry(rgbd_ptc)
-    # vis.add_geometry(pm_ptc)
+    vis.add_geometry(pm_ptc)
     # lbl = 'Participant {} sample {}'.format(sample[0], sample[2])
     # vis.add_geometry(text_3d(lbl, (-0.5, 1.0, 2), direction=(0.01, 0, -1), degree=-90, font_size=150, density=0.2))
 
