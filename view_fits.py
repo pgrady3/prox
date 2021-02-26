@@ -20,13 +20,16 @@ from prox.misc_utils import smpl_to_openpose
 import pprint
 import argparse
 from patrick_util import *
+import json
 
 
 SLP_PATH = '/home/patrick/datasets/SLP/danaLab'
 FITS_PATH = '/home/patrick/bed/prox/slp_fits'
 FITS_TWO_PATH = '/home/patrick/bed/prox/slp_fits_two'
 SLP_TFORM_PATH = '/home/patrick/bed/prox/slp_tform'
+STAGE_TWO_ANNOTATIONS_FILE = 'stage_two_anno.json'
 
+user_result = -1
 
 def get_all_smpl(pkl_data, json_data):
     gender = json_data['people'][0]['gender_gt']
@@ -205,6 +208,57 @@ def get_rgb(sample):
     return rgbd_ptc
 
 
+def open3d_register_keys(vis):
+    def press_0(vis):
+        global user_result
+        user_result = 0
+        vis.close()
+
+    def press_1(vis):
+        global user_result
+        user_result = 1
+        vis.close()
+
+    def press_2(vis):
+        global user_result
+        user_result = 2
+        vis.close()
+
+    def press_3(vis):
+        global user_result
+        user_result = 3
+        vis.close()
+
+    def press_4(vis):
+        global user_result
+        user_result = 4
+        vis.close()
+
+    def press_5(vis):
+        global user_result
+        user_result = 5
+        vis.close()
+
+    def press_p(vis):
+        global user_result
+        user_result = 99
+        vis.close()
+
+    def press_f(vis):
+        global user_result
+        user_result = 999
+        vis.close()
+
+    vis.register_key_callback(ord('0'), press_0)
+    vis.register_key_callback(ord('1'), press_1)
+    vis.register_key_callback(ord('2'), press_2)
+    vis.register_key_callback(ord('3'), press_3)
+    vis.register_key_callback(ord('4'), press_4)
+    vis.register_key_callback(ord('5'), press_5)
+    vis.register_key_callback(ord('P'), press_p)    # Pass
+    vis.register_key_callback(ord('F'), press_f)    # Fail
+
+
 def view_fit(sample, idx):
     if not args.two:
         pkl_path = os.path.join(FITS_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'results', 'image_{:06d}'.format(sample[2]), '000.pkl')
@@ -221,13 +275,19 @@ def view_fit(sample, idx):
     with open(json_path) as keypoint_file:
         json_data = json.load(keypoint_file)
 
+    if args.two and str(sample) in stage_two_annotations:
+        anno = stage_two_annotations[str(sample)]
+        if anno < 10:
+            # Replace the automatically chosen best fit with the manually picked one
+            pkl_np.update(pkl_np['all_results'][anno])
+
     smpl_vertices, smpl_faces, smpl_mesh, smpl_mesh_calc, joint_markers = get_smpl(pkl_np, json_data)
     # pcd = get_depth(idx, sample)
     pcd = get_depth_henry(idx, sample)
     pcd_saved = get_depth_saved(idx, sample)
     rgbd_ptc = get_rgb(sample)
 
-    vis = o3d.visualization.Visualizer()
+    vis = o3d.visualization.VisualizerWithKeyCallback()
     vis.create_window()
     vis.add_geometry(pcd)
     # vis.add_geometry(pcd_saved)
@@ -245,9 +305,24 @@ def view_fit(sample, idx):
         vis.add_geometry(o)
 
     set_camera_extrinsic(vis, np.eye(4))
+
+    global user_result
+    user_result = -1
+
+    open3d_register_keys(vis)
     vis.run()
     vis.destroy_window()
+    print('Got keycode:', user_result)
     print('\n')
+
+    if args.annotate and user_result >= 0:
+        stage_two_annotations[str(sample)] = user_result
+        with open(STAGE_TWO_ANNOTATIONS_FILE, 'w') as fp:
+            json.dump(stage_two_annotations, fp, indent=4)
+
+        if user_result < 10:
+            return True     # Do a redo!
+    return False
 
 
 def make_dataset(skip_sample=0, skip_participant=0):
@@ -257,17 +332,24 @@ def make_dataset(skip_sample=0, skip_participant=0):
         if sample[0] < skip_participant or sample[2] < skip_sample:
             continue
 
-        view_fit(sample, idx)
+        while True:
+            redo_bool = view_fit(sample, idx)
+            if not redo_bool:
+                break
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-
     parser.add_argument('-s', '--sample', type=int, default=0)
     parser.add_argument('-p', '--participant', type=int, default=0)
     parser.add_argument('-t', '--two', action='store_true', help='View stage two fits')
     parser.add_argument('-a', '--annotate', action='store_true', help='Run annotation')
     args = parser.parse_args()
+
+    stage_two_annotations = {}
+    if os.path.exists(STAGE_TWO_ANNOTATIONS_FILE):
+        with open(STAGE_TWO_ANNOTATIONS_FILE) as f:
+            stage_two_annotations = json.load(f)
 
     class PseudoOpts:
         SLP_fd = SLP_PATH
