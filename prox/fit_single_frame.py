@@ -557,8 +557,11 @@ def fit_single_frame(img,
 
         _, H, W, _ = img.shape
 
-        for body_mean_idx in range(joint_limits.NUM_MODES):
-            body_mean_pose = joint_limits.get_initialization_pose(body_mean_idx)
+        number_restarts = joint_limits.NUM_MODES
+        if kwargs['stage_two']:
+            number_restarts = kwargs['stage_two_random_restarts']
+        for body_mean_idx in range(number_restarts):
+            body_mean_pose = joint_limits.get_initialization_pose(body_mean_idx % joint_limits.NUM_MODES)
 
             # Reset the parameters to estimate the initial translation of the
             # body model
@@ -576,11 +579,35 @@ def fit_single_frame(img,
                 camera_opt_params = [camera.translation, body_model.global_orient]
 
             elif camera_mode == 'fixed':
-                # body_model.reset_params()
-                # body_model.transl[:] = torch.tensor(init_t)
-                # body_model.body_pose[:] = torch.tensor(body_mean_pose)
-                body_model.reset_params(body_pose=body_mean_pose, transl=init_t)
-                camera_opt_params = [body_model.transl, body_model.global_orient]
+                if kwargs['stage_two']:
+                    # Start bodies from earlier optimization results
+                    # initial_transl =
+                    participant = global_vars.cur_participant[0].item()
+                    samples = global_vars.cur_sample
+                    initial_beta = torch.tensor(global_vars.stage_two_dict['betas'][participant])
+
+                    initial_pose = torch.zeros_like(body_model.body_pose)
+                    initial_transl = torch.zeros_like(body_model.transl)
+                    initial_global_orient = torch.zeros_like(body_model.global_orient)
+
+                    for i in range(samples.shape[0]):
+                        axang_var = joint_limits.get_axang_var()
+
+                        pose_noise = axang_var * torch.randn(axang_var.shape) * kwargs['stage_two_pose_noise']
+                        sample_dict = global_vars.stage_two_dict['all_results'][(participant, 'uncover', samples[i].item())]
+                        initial_pose[i, :] = sample_dict['pose'] + pose_noise
+                        initial_transl[i, :] = sample_dict['transl']
+                        initial_global_orient[i, :] = sample_dict['global_orient']
+
+                    body_model.reset_params(body_pose=initial_pose, transl=initial_transl, betas=initial_beta, global_orient=initial_global_orient)
+                    camera_opt_params = [body_model.transl, body_model.global_orient]
+                else:
+                    # Do normal stuff
+                    # body_model.reset_params()
+                    # body_model.transl[:] = torch.tensor(init_t)
+                    # body_model.body_pose[:] = torch.tensor(body_mean_pose)
+                    body_model.reset_params(body_pose=body_mean_pose, transl=init_t)
+                    camera_opt_params = [body_model.transl, body_model.global_orient]
 
             # If the distance between the 2D shoulders is smaller than a
             # predefined threshold then try 2 fits, the initial one and a 180
@@ -624,7 +651,7 @@ def fit_single_frame(img,
             # If the 2D detections/positions of the shoulder joints are too
             # close the rotate the body by 180 degrees and also fit to that
             # orientation
-            if try_both_orient:
+            if try_both_orient and not kwargs['stage_two']:
                 with torch.no_grad():
                     flipped_orient = torch.zeros_like(body_model.global_orient)
                     for i in range(batch_size):
@@ -653,10 +680,14 @@ def fit_single_frame(img,
                 opt_start = time.time()
                 or_idx += 1
 
-                new_params = defaultdict(transl=body_transl,
-                                         global_orient=orient,
-                                         body_pose=body_mean_pose)
-                body_model.reset_params(**new_params)
+                if kwargs['stage_two']:
+                    print('NOT RESETTING BETWEEN ORIENTATIONS')
+                else:
+                    new_params = defaultdict(transl=body_transl,
+                                             global_orient=orient,
+                                             body_pose=body_mean_pose)
+                    body_model.reset_params(**new_params)
+
                 if use_vposer:
                     with torch.no_grad():
                         pose_embedding.fill_(0)
@@ -670,6 +701,9 @@ def fit_single_frame(img,
                     else:
                         body_model.transl.requires_grad = True
                     body_params = list(body_model.parameters())
+
+                    if kwargs['stage_two']:
+                        body_model.betas.requires_grad = False
 
                     final_params = list(
                         filter(lambda x: x.requires_grad, body_params))

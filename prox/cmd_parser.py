@@ -402,6 +402,23 @@ def parse_config(argv=None):
                         default=False,
                         help='Read raw npy pointcloud file')
 
+    parser.add_argument('--stage_two',
+                        type=lambda arg: arg.lower() == 'true',
+                        default=False,
+                        help='Do stage two fits')
+    parser.add_argument('--stage_two_pose_noise',
+                        default=0.1,
+                        type=float,
+                        help='pose noise')
+    parser.add_argument('--stage_two_random_restarts',
+                        default=6,
+                        type=int,
+                        help='random restarts')
+    parser.add_argument('--skip_participants',
+                        default=-1,
+                        type=int,
+                        help='Skip some participants at start')
+
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict

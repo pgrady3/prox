@@ -37,6 +37,13 @@ axang_limits_patrick = np.array(  # In degrees
 
 NUM_MODES = 3
 
+def get_axang_var():
+    with torch.no_grad():
+        axang_limits = torch.tensor(axang_limits_patrick / 180 * np.pi, dtype=torch.float)
+        axang_mean = axang_limits.detach().mean(1)
+        axang_var = torch.abs(axang_limits[:, 1] - axang_mean)
+
+    return axang_var
 
 def get_initialization_pose(mode=0):
     with torch.no_grad():

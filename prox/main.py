@@ -40,6 +40,7 @@ from fit_single_frame import fit_single_frame
 
 from camera import create_camera
 from prior import create_prior
+import pickle
 
 from models.betanet import FC
 import global_vars
@@ -48,7 +49,11 @@ from tqdm import tqdm
 
 torch.backends.cudnn.enabled = False
 
+
 def main(**args):
+    if args['stage_two']:
+        global_vars.stage_two_dict = pickle.load(open('stage_two.pkl', 'rb'))
+
     data_folder = args.get('recording_dir')
     recording_name = osp.basename(args.get('recording_dir'))
     scene_name = recording_name.split("_")[0]
@@ -62,7 +67,6 @@ def main(**args):
     body_segments_dir = osp.join(base_dir, 'body_segments')
 
     batch_size = args.get('batch_size')
-
 
     output_folder = args.get('output_folder')
     output_folder = osp.expandvars(output_folder)
@@ -352,8 +356,10 @@ if __name__ == "__main__":
         all_recordings = glob('slp_tform/recordings/*/')
         all_recordings.sort()
 
-        print('STARTING PARTWAY')
-        all_recordings = all_recordings[59:]  # Start partway through the dataset
+        if args['skip_participants'] > 0:
+            to_skip = args['skip_participants'] - 1
+            print('STARTING PARTWAY!!!!')
+            all_recordings = all_recordings[to_skip:]  # Start partway through the dataset
 
         for recording in all_recordings:
             args['recording_dir'] = recording[:-1]

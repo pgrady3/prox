@@ -24,6 +24,7 @@ from patrick_util import *
 
 SLP_PATH = '/home/patrick/datasets/SLP/danaLab'
 FITS_PATH = '/home/patrick/bed/prox/slp_fits'
+FITS_TWO_PATH = '/home/patrick/bed/prox/slp_fits_two'
 SLP_TFORM_PATH = '/home/patrick/bed/prox/slp_tform'
 
 
@@ -51,10 +52,15 @@ def get_all_smpl(pkl_data, json_data):
 
         smpl_o3d.translate(t)
 
+        result['loss_dict']['restart_idx'] = i
+
         sub_loss_dict = dict(result['loss_dict'])
         sub_loss_dict.pop('batch_idx', None)
         sub_loss_dict.pop('contact', None)
         sub_loss_dict.pop('angle_prior', None)
+        if args.two:
+            sub_loss_dict.pop('physical', None)
+            sub_loss_dict.pop('shape', None)
 
         for idx, key in enumerate(sub_loss_dict.keys()):
             lbl = '{} {:.2f}'.format(key, float(result['loss_dict'][key]))
@@ -200,7 +206,11 @@ def get_rgb(sample):
 
 
 def view_fit(sample, idx):
-    pkl_path = os.path.join(FITS_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'results', 'image_{:06d}'.format(sample[2]), '000.pkl')
+    if not args.two:
+        pkl_path = os.path.join(FITS_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'results', 'image_{:06d}'.format(sample[2]), '000.pkl')
+    else:
+        pkl_path = os.path.join(FITS_TWO_PATH, '{}_{:05d}'.format(sample[1], sample[0]), 'results', 'image_{:06d}'.format(sample[2]), '000.pkl')
+
     if not os.path.exists(pkl_path):
         return
 
@@ -234,7 +244,6 @@ def view_fit(sample, idx):
     for o in all_smpl:
         vis.add_geometry(o)
 
-
     set_camera_extrinsic(vis, np.eye(4))
     vis.run()
     vis.destroy_window()
@@ -256,6 +265,8 @@ if __name__ == "__main__":
 
     parser.add_argument('-s', '--sample', type=int, default=0)
     parser.add_argument('-p', '--participant', type=int, default=0)
+    parser.add_argument('-t', '--two', action='store_true', help='View stage two fits')
+    parser.add_argument('-a', '--annotate', action='store_true', help='Run annotation')
     args = parser.parse_args()
 
     class PseudoOpts:
