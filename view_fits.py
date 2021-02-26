@@ -14,6 +14,7 @@ import smplx
 import trimesh
 from prox.misc_utils import text_3d
 import matplotlib.cm as cm
+import matplotlib.pyplot as plt
 from prox.camera import PerspectiveCamera
 from prox.misc_utils import smpl_to_openpose
 import pprint
@@ -23,6 +24,7 @@ from patrick_util import *
 
 SLP_PATH = '/home/patrick/datasets/SLP/danaLab'
 FITS_PATH = '/home/patrick/bed/prox/slp_fits'
+SLP_TFORM_PATH = '/home/patrick/bed/prox/slp_tform'
 
 
 def get_all_smpl(pkl_data, json_data):
@@ -157,6 +159,31 @@ def get_depth(idx, sample):
     return pcd
 
 
+def get_depth_henry(idx, sample):
+    # Get the depth image, but warped to PM
+    raw_depth = SLP_dataset.get_array_A2B(idx=idx, modA='depthRaw', modB='depthRaw')
+
+    # pointcloud = henry_convert_depth_2_pc(SLP_dataset, raw_depth, idx)
+    pointcloud = henry_convert_depth_2_pc_no_interp(SLP_dataset, raw_depth, idx)
+
+    valid_z = np.logical_and(pointcloud[:, 2] > 1.55, pointcloud[:, 2] < 2.15)  # Cut out any outliers above the bed
+    valid_x = np.logical_and(pointcloud[:, 0] > -0.3, pointcloud[:, 0] < 0.8)  # Cut X
+    valid_y = np.logical_and(pointcloud[:, 1] > -1.1, pointcloud[:, 1] < 1.0)  # Cut Y
+    valid_all = np.logical_and.reduce((valid_x, valid_y, valid_z))
+    pointcloud = pointcloud[valid_all, :]
+
+    ptc_depth = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pointcloud))
+    return ptc_depth
+
+
+def get_depth_saved(idx, sample):
+    depth_path = os.path.join(SLP_TFORM_PATH, 'recordings', '{}_{:05d}'.format(sample[1], sample[0]), 'Depth', 'image_{:06d}_raw_ptc.npy'.format(sample[2]))
+    pointcloud = np.load(depth_path)
+    pointcloud[:, 2] -= 0.2
+    ptc_depth = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pointcloud))
+    return ptc_depth
+
+
 def get_rgb(sample):
     # Load RGB image
     rgb_path = os.path.join(SLP_PATH, '{:05d}'.format(sample[0]), 'RGB', sample[1], 'image_{:06d}.png'.format(sample[2]))
@@ -185,12 +212,15 @@ def view_fit(sample, idx):
         json_data = json.load(keypoint_file)
 
     smpl_vertices, smpl_faces, smpl_mesh, smpl_mesh_calc, joint_markers = get_smpl(pkl_np, json_data)
-    pcd = get_depth(idx, sample)
+    # pcd = get_depth(idx, sample)
+    pcd = get_depth_henry(idx, sample)
+    pcd_saved = get_depth_saved(idx, sample)
     rgbd_ptc = get_rgb(sample)
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     vis.add_geometry(pcd)
+    # vis.add_geometry(pcd_saved)
     vis.add_geometry(smpl_mesh)
     vis.add_geometry(smpl_mesh_calc)
     vis.add_geometry(rgbd_ptc)

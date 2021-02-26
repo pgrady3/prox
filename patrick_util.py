@@ -90,13 +90,35 @@ def henry_get_warped_img(depth_arr, homography):
     return depth_arr_mod
 
 
-def henry_convert_depth_2_pc(slp_dataset, depth_arr, idx):
+def henry_convert_depth_2_pc(slp_dataset, depth_arr, idx, bb=None):
     depth_homography = henry_get_depth_homography(slp_dataset, idx)
     depth_arr_mod = henry_get_warped_img(depth_arr, depth_homography)
 
     cd_modified = np.matmul(depth_homography, np.array([slp_dataset.c_d[0], slp_dataset.c_d[1], 1.0]).T)    # Multiply the center of the depth image by homography
     cd_modified = cd_modified/cd_modified[2]    # Re-normalize
 
-    ptc = ut.get_ptc(depth_arr_mod, slp_dataset.f_d, cd_modified[0:2], None) / 1000.0
+    ptc = ut.get_ptc(depth_arr_mod, slp_dataset.f_d, cd_modified[0:2], bb) / 1000.0
 
+    return ptc
+
+
+def henry_convert_depth_2_pc_no_interp(slp_dataset, depth_arr, idx, bb=None):
+    # The other methods of using cv2.warpPerspective apply interpolation to the image, which is bad. This doesn't
+    # Input image is YX
+    depth_homography = henry_get_depth_homography(slp_dataset, idx)
+    orig_x, orig_y = np.meshgrid(np.arange(0, depth_arr.shape[1]), np.arange(0, depth_arr.shape[0]))
+
+    orig_y = orig_y.flatten()
+    orig_x = orig_x.flatten()
+    input_coords_homo = np.stack((orig_x, orig_y, np.ones(orig_x.shape)), 0)
+    output_coords_homo = np.matmul(depth_homography, input_coords_homo)
+
+    output_coords = output_coords_homo / output_coords_homo[2, :]
+    output_coords = output_coords.T
+    output_coords[:, 2] = depth_arr.flatten()
+
+    cd_modified = np.matmul(depth_homography, np.array([slp_dataset.c_d[0], slp_dataset.c_d[1], 1.0]).T)    # Multiply the center of the depth image by homography
+    cd_modified = cd_modified/cd_modified[2]    # Re-normalize
+
+    ptc = ut.pixel2cam(output_coords, slp_dataset.f_d, cd_modified[0:2]) / 1000.0
     return ptc

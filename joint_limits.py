@@ -6,14 +6,15 @@ import trimesh
 from prox.misc_utils import text_3d
 
 # Joint reference here https://github.com/gulvarol/smplpytorch
+# https://github.com/CMU-Perceptual-Computing-Lab/openpose/blob/master/doc/02_output.md
 # https://github.com/Healthcare-Robotics/bodies-at-rest/blob/master/lib_py/mesh_depth_lib_br.py#L70
 axang_limits_patrick = np.array(  # In degrees
     [
      [-140., 10.], [-60., 120.], [-60., 60.],   # Hip L 0
-     [-140., 10.], [-120., 60.], [-60., 60.],   # Hip R
-     [-30., 110.], [-8., 8.], [-8., 8.],  # Lower back
-     [-1.3, 139.9], [-0.6, 0.6], [-0.6, 0.6],  # Knee L
-     [-1.3, 139.9], [-0.6, 0.6], [-0.6, 0.6],  # Knee R
+     [-140., 10.], [-120., 60.], [-60., 60.],   # Hip R 1
+     [-30., 110.], [-8., 8.], [-8., 8.],  # Lower back 2
+     [-1.3, 139.9], [-0.6, 0.6], [-0.6, 0.6],  # Knee L 3
+     [-1.3, 139.9], [-0.6, 0.6], [-0.6, 0.6],  # Knee R 4
      [-20., 20.], [-8., 8.], [-8., 8.],  # Mid back 5
      [-15., 60.], [-15., 15.], [-15., 15.],  # Ankle L
      [-15., 60.], [-15., 15.], [-15., 15.],  # Ankle R

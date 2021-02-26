@@ -192,10 +192,11 @@ def main(**args):
     # A weight for every joint of the model
     joint_weights = dataset_obj.get_joint_weights().to(device=device, dtype=dtype)
 
-    # Patrick: Hack, inflate the weight of hands and elbows
+    # Patrick: Hack, inflate the weight of feet, hands and elbows
     inflate_amount = 3
-    for id in [3, 4, 6, 7]:
-        print('Inflating joint', id)
+    joints_to_inflate = [3, 4, 6, 7, 11, 14]    # This is in coco25, https://github.com/CMU-Perceptual-Computing-Lab/openpose/blob/master/doc/02_output.md
+    print('Inflating weights of some joints in optimization', joints_to_inflate)
+    for id in joints_to_inflate:
         joint_weights[id] = inflate_amount
 
     # Add a fake batch dimension for broadcasting
@@ -351,8 +352,8 @@ if __name__ == "__main__":
         all_recordings = glob('slp_tform/recordings/*/')
         all_recordings.sort()
 
-        # print('STARTING PARTWAY')
-        # all_recordings = all_recordings[70:]  # Start partway through the dataset
+        print('STARTING PARTWAY')
+        all_recordings = all_recordings[59:]  # Start partway through the dataset
 
         for recording in all_recordings:
             args['recording_dir'] = recording[:-1]
