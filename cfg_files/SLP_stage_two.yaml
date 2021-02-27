@@ -1,7 +1,7 @@
 # SLP stage two optimization
 
 stage_two: True
-stage_two_pose_noise: 0.2
+stage_two_pose_noise: 0.4
 stage_two_random_restarts: 6
 
 # From SLP README.ME Depth
@@ -175,10 +175,10 @@ body_pose_prior_weights:
     - 100
     - 100
     - 100
-    - 100
-    - 100
     - 200
     - 200
+    - 400
+    - 400
 coll_loss_weights:
     - 0.0
     - 0.0

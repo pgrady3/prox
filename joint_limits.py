@@ -10,8 +10,8 @@ from prox.misc_utils import text_3d
 # https://github.com/Healthcare-Robotics/bodies-at-rest/blob/master/lib_py/mesh_depth_lib_br.py#L70
 axang_limits_patrick = np.array(  # In degrees
     [
-     [-140., 10.], [-60., 120.], [-60., 60.],   # Hip L 0
-     [-140., 10.], [-120., 60.], [-60., 60.],   # Hip R 1
+     [-140., 10.], [-50., 80.], [-60., 60.],   # Hip L 0
+     [-140., 10.], [-80., 50.], [-60., 60.],   # Hip R 1
      [-30., 110.], [-8., 8.], [-8., 8.],  # Lower back 2
      [-1.3, 139.9], [-0.6, 0.6], [-0.6, 0.6],  # Knee L 3
      [-1.3, 139.9], [-0.6, 0.6], [-0.6, 0.6],  # Knee R 4
@@ -27,8 +27,8 @@ axang_limits_patrick = np.array(  # In degrees
      [-15., 45.], [-5., 5.], [-5., 5.],  # Upper neck
      [-80., 70.], [-90., 35.], [-90., 60.],  # Outer shoulder L 15
      [-80., 70.], [-30., 90.], [-60., 90.],  # Outer shoulder R 16
-     [-0.6, 0.6], [-160, 2.7], [-0.6, 0.6],  # Elbow L
-     [-0.6, 0.6], [-2.7, 160], [-0.6, 0.6],  # Elbow R
+     [-0.6, 0.6], [-150, 2.7], [-0.6, 0.6],  # Elbow L
+     [-0.6, 0.6], [-2.7, 150], [-0.6, 0.6],  # Elbow R
      [-30., 30.], [-15., 15.], [-30., 30.],  # Wrist L
      [-30., 30.], [-15., 15.], [-30., 30.],  # Wrist R 20
      [-0.6, 0.6], [-0.6, 0.6], [-0.6, 0.6],  # Fingers L
@@ -71,7 +71,7 @@ def get_initialization_pose(mode=0):
 
 
 def view_initialization_pose():
-    vis = o3d.Visualizer()
+    vis = o3d.visualization.Visualizer()
     vis.create_window()
 
     for i in range(NUM_MODES):
@@ -98,9 +98,9 @@ def get_smpl(joints, axes, amounts, translation=(0, 0, 0), starting_pose=None):
     output = model(body_pose=torch.Tensor(body_pose), return_verts=True)
     smpl_vertices = output.vertices.detach().cpu().numpy().squeeze()
 
-    smpl_o3d = o3d.TriangleMesh()
-    smpl_o3d.triangles = o3d.Vector3iVector(model.faces)
-    smpl_o3d.vertices = o3d.Vector3dVector(smpl_vertices + np.array(translation))
+    smpl_o3d = o3d.geometry.TriangleMesh()
+    smpl_o3d.triangles = o3d.utility.Vector3iVector(model.faces)
+    smpl_o3d.vertices = o3d.utility.Vector3dVector(smpl_vertices + np.array(translation))
     smpl_o3d.compute_vertex_normals()
     smpl_o3d.paint_uniform_color([amounts[0]/2 + 0.5, 0.3, 0.3])
 
@@ -109,9 +109,9 @@ def get_smpl(joints, axes, amounts, translation=(0, 0, 0), starting_pose=None):
 
 def view_fit(joint, translation=(0, 0, 0)):
     translation = np.array(translation)
-    vis = o3d.Visualizer()
+    vis = o3d.visualization.Visualizer()
     vis.create_window()
-    vis.add_geometry(get_smpl([joint], [0], [0.5], translation=translation, mean=False))
+    vis.add_geometry(get_smpl([joint], [0], [0.5], translation=translation, starting_pose=None))
 
     for i in range(6):
         trans = translation + (int(i/2)*1.5 + 1, 0, 0)
@@ -125,7 +125,7 @@ def view_fit(joint, translation=(0, 0, 0)):
 
 
 def view_multi(joints, axes, amounts):
-    vis = o3d.Visualizer()
+    vis = o3d.visualization.Visualizer()
     vis.create_window()
     vis.add_geometry(get_smpl(joints, axes, amounts))
 
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     axang_mean = axang_limits.detach().mean(1)
     axang_var = torch.abs(axang_limits[:, 1] - axang_mean)
 
-    view_initialization_pose()
+    # view_initialization_pose()
 
     # view_multi([2, 5, 8], [0, 0, 0], [0, 0, 0]) # Back
     # view_multi([2, 5, 8], [0, 0, 0], [1, 1, 1])
@@ -157,12 +157,15 @@ if __name__ == "__main__":
     # view_multi([11, 14], [2, 2], [0, 0]) # Neck
     # view_multi([11, 14], [2, 2], [1, 1]) # Neck
 
-    view_multi([12, 15, 17], [0, 0, 1], [0, 0, 0.5])    # Shoulder
-    view_multi([12, 15, 17], [0, 0, 1], [1, 1, 0.5])    # Shoulder
-    view_multi([12, 15, 17], [1, 1, 1], [0, 0, 0.5])    # Shoulder
-    view_multi([12, 15, 17], [1, 1, 1], [1, 1, 0.5])    # Shoulder
-    view_multi([12, 15, 17], [2, 2, 1], [0, 0, 0.5])    # Shoulder
-    view_multi([12, 15, 17], [2, 2, 1], [1, 1, 0.5])    # Shoulder
+    # view_multi([12, 15, 17], [0, 0, 1], [0, 0, 0.5])    # Shoulder
+    # view_multi([12, 15, 17], [0, 0, 1], [1, 1, 0.5])    # Shoulder
+    # view_multi([12, 15, 17], [1, 1, 1], [0, 0, 0.5])    # Shoulder
+    # view_multi([12, 15, 17], [1, 1, 1], [1, 1, 0.5])    # Shoulder
+    # view_multi([12, 15, 17], [2, 2, 1], [0, 0, 0.5])    # Shoulderq
+    # view_multi([12, 15, 17], [2, 2, 1], [1, 1, 0.5])    # Shoulder
+
+    view_multi([0, 0, 0, 3], [0, 1, 2, 0], [0, 0, 0, 1])    # Hip
+    view_multi([0, 0, 0, 3], [0, 1, 2, 0], [1, 1, 1, 1])    # Hip
 
     for i in range(0, 23):
         view_fit(i)
