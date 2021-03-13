@@ -42,6 +42,7 @@ import sys
 sys.path.append('/home/patrick/bed/SLP-Dataset-and-Code')
 import utils.utils as ut    # SLP utils
 import open3d as o3d
+import global_vars
 
 
 Keypoints = namedtuple('Keypoints',
@@ -174,6 +175,16 @@ class OpenPose(Dataset):
             self.img_paths = self.img_paths[start::step]
         else:
             self.img_paths = [self.img_paths[id -1] for id in frame_ids]
+
+        if global_vars.stage_three_only_do is not None:
+            new_list = list()
+            for img in self.img_paths:
+                sample_id = img.split('_')[-1]
+                sample_id = int(sample_id.split('.')[0])
+                if sample_id in global_vars.stage_three_only_do:
+                    new_list.append(img)
+
+            self.img_paths = new_list
 
         self.cnt = 0
         self.depth_scale = depth_scale

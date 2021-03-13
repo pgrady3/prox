@@ -419,6 +419,11 @@ def parse_config(argv=None):
                         type=int,
                         help='Skip some participants at start')
 
+    parser.add_argument('--stage_three',
+                        type=lambda arg: arg.lower() == 'true',
+                        default=False,
+                        help='Do stage two fits')
+
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict

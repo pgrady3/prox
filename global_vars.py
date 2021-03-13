@@ -8,3 +8,4 @@ cur_weight = 0
 cur_height = 0
 cur_max_joint = 0
 stage_two_dict = None
+stage_three_only_do = None

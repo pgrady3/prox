@@ -26,6 +26,7 @@ import json
 SLP_PATH = '/home/patrick/datasets/SLP/danaLab'
 FITS_PATH = '/home/patrick/bed/prox/slp_fits'
 FITS_TWO_PATH = '/home/patrick/bed/prox/slp_fits_two'
+FITS_THREE_PATH = '/home/patrick/bed/prox/slp_fits_three'
 SLP_TFORM_PATH = '/home/patrick/bed/prox/slp_tform'
 STAGE_TWO_ANNOTATIONS_FILE = 'stage_two_anno.json'
 
@@ -343,6 +344,7 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--sample', type=int, default=0)
     parser.add_argument('-p', '--participant', type=int, default=0)
     parser.add_argument('-t', '--two', action='store_true', help='View stage two fits')
+    parser.add_argument('--three', action='store_true', help='View stage three fits')
     parser.add_argument('-a', '--annotate', action='store_true', help='Run annotation')
     args = parser.parse_args()
 
@@ -350,6 +352,9 @@ if __name__ == "__main__":
     if os.path.exists(STAGE_TWO_ANNOTATIONS_FILE):
         with open(STAGE_TWO_ANNOTATIONS_FILE) as f:
             stage_two_annotations = json.load(f)
+
+    if args.three:
+        FITS_TWO_PATH = FITS_THREE_PATH
 
     class PseudoOpts:
         SLP_fd = SLP_PATH

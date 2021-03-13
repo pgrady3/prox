@@ -596,6 +596,9 @@ def fit_single_frame(img,
                         pose_noise = axang_var * torch.randn(axang_var.shape) * kwargs['stage_two_pose_noise']
                         sample_dict = global_vars.stage_two_dict['all_results'][(participant, 'uncover', samples[i].item())]
                         initial_pose[i, :] = sample_dict['pose'] + pose_noise
+
+                        initial_pose[i, :] = joint_limits.clip_limits(initial_pose[i, :])
+
                         initial_transl[i, :] = sample_dict['transl']
                         initial_global_orient[i, :] = sample_dict['global_orient']
 

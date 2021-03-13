@@ -46,6 +46,7 @@ from models.betanet import FC
 import global_vars
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import json
 
 torch.backends.cudnn.enabled = False
 
@@ -352,7 +353,46 @@ def main(**args):
 if __name__ == "__main__":
     args = parse_config()
 
-    if args['recording_dir'] == 'none':
+    if args['stage_three']:
+        args['stage_two'] = True    # Enable all of the stage two functionality
+        stage_three_redo_dict = dict()
+        import ast
+
+        with open('stage_two_anno.json') as f:
+            stage_two_annotations = json.load(f)
+
+        with open('stage_three_passed.json') as f:
+            stage_three_passed = json.load(f)
+
+        for sample, anno in stage_two_annotations.items():
+            sample = ast.literal_eval(sample)
+            participant = sample[0]
+            if anno > 100:
+                if str(sample) in stage_three_passed:
+                    print('Already passed stage three', sample)
+                    continue
+
+                if participant not in stage_three_redo_dict:
+                    stage_three_redo_dict[participant] = list()
+
+                stage_three_redo_dict[participant].append(sample[2])
+        print(stage_three_redo_dict)
+
+        all_recordings = glob('slp_tform/recordings/*/')
+        all_recordings.sort()
+
+        for recording in all_recordings:
+            args['recording_dir'] = recording[:-1]
+            p_id = int(args['recording_dir'].split('_')[-1])
+            if p_id not in stage_three_redo_dict:
+                continue
+
+            global_vars.stage_three_only_do = stage_three_redo_dict[p_id]
+            print('Doing participant {} samples {}'.format(p_id, stage_three_redo_dict[p_id]))
+
+            main(**args)
+
+    elif args['recording_dir'] == 'none':
         all_recordings = glob('slp_tform/recordings/*/')
         all_recordings.sort()
 

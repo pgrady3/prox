@@ -37,6 +37,17 @@ axang_limits_patrick = np.array(  # In degrees
 
 NUM_MODES = 3
 
+
+def clip_limits(input_angles):
+    # Clips joint angles to the limits
+    output_angles = torch.zeros_like(input_angles)
+
+    for i in range(input_angles.shape[0]):
+        output_angles[i] = torch.clamp(input_angles[i], axang_limits_patrick[i, 0], axang_limits_patrick[i, 1])
+
+    return output_angles
+
+
 def get_axang_var():
     with torch.no_grad():
         axang_limits = torch.tensor(axang_limits_patrick / 180 * np.pi, dtype=torch.float)
