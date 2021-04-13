@@ -53,6 +53,7 @@ def get_all_smpl(pkl_data, json_data):
         smpl_o3d.triangles = o3d.utility.Vector3iVector(model.faces)
         smpl_o3d.vertices = o3d.utility.Vector3dVector(smpl_vertices)
         smpl_o3d.compute_vertex_normals()
+        smpl_o3d.paint_uniform_color([0.3, 0.4, 0.8])
 
         smpl_o3d.translate(t)
 
